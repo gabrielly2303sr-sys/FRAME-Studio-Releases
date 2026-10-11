@@ -1,3 +1,9 @@
+## 2.4.13 — 2026-10-11
+
+- Fixed missing homepage, author email, and Linux maintainer metadata required by electron-builder for DEB/RPM packaging.
+- Moved DEB/RPM packaging options into the `build` configuration so declared FFmpeg dependencies are applied.
+- Kept automatic updates for installed Windows NSIS and Linux AppImage builds; DEB/RPM and Windows portable remain manual-update packages.
+
 ## 2.4.12 — 2026-10-11
 
 - Added GitHub Releases update checks for installed Windows NSIS builds and Linux AppImage builds.

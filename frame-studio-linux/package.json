@@ -1,6 +1,6 @@
 {
   "name": "frame-studio",
-  "version": "2.4.12",
+  "version": "2.4.13",
   "private": true,
   "description": "Local video and motion graphics editor with automatic updates, multilayer timeline, keyframes, effects, and time remapping",
   "main": "main.cjs",
@@ -86,7 +86,8 @@
       "desktop": {
         "Name": "FRAME Studio",
         "Comment": "Local video and motion graphics editor"
-      }
+      },
+      "maintainer": "Gabrielly <gabrielly2303sr-sys@users.noreply.github.com>"
     },
     "publish": [
       {
@@ -97,17 +98,18 @@
       }
     ],
     "deb": {
-      "depends": [
-        "ffmpeg"
-      ]
+      "maintainer": "Gabrielly <gabrielly2303sr-sys@users.noreply.github.com>"
     },
     "rpm": {
-      "depends": [
-        "ffmpeg"
-      ]
+      "maintainer": "Gabrielly <gabrielly2303sr-sys@users.noreply.github.com>"
     }
   },
   "dependencies": {
     "electron-updater": "^6.6.2"
+  },
+  "homepage": "https://github.com/gabrielly2303sr-sys/FRAME-Studio-Releases",
+  "author": {
+    "name": "Gabrielly",
+    "email": "gabrielly2303sr-sys@users.noreply.github.com"
   }
 }
