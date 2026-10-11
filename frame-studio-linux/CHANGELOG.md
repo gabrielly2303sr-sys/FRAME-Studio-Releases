@@ -1,8 +1,20 @@
-## 2.4.13 — 2026-10-11
+## 2.4.14 — 2026-10-11
 
-- Fixed missing homepage, author email, and Linux maintainer metadata required by electron-builder for DEB/RPM packaging.
-- Moved DEB/RPM packaging options into the `build` configuration so declared FFmpeg dependencies are applied.
-- Kept automatic updates for installed Windows NSIS and Linux AppImage builds; DEB/RPM and Windows portable remain manual-update packages.
+### 🐛 Corrigido
+- [FIX] Corrigido o arrasto de clipes na timeline: soltar mídia ou texto na borda superior da área de timeline não deve deixar o clipe preso ao ponteiro. O gesto agora encerra por eventos globais de ponteiro e possui cancelamento seguro se a janela perder foco.
+- [FIX] A biblioteca de mídia agora aceita soltar assets em toda a área da timeline, incluindo a régua e a barra superior, sem criar clipes duplicados pelo bubbling do evento.
+
+### ✨ Adicionado
+- [ADDED] A aba de texto agora lista as famílias de fontes instaladas no sistema operacional (fontconfig no Linux e coleção de fontes do Windows), mantendo fontes importadas e fontes de projetos existentes.
+- [ADDED] No Scene Editor 3D, após selecionar a câmera, use W/A/S/D para movê-la nos eixos locais; Q/E movem para baixo/cima e Shift acelera o deslocamento.
+- [ADDED] Notas de versão categorizadas em Correções, Adicionado, Melhorado, Removido e Compatibilidade, com configuração de categorias para o gerador de Release Notes do GitHub.
+
+### ⚡ Melhorado
+- [IMPROVED] Os gestos da timeline usam listeners globais em fase de captura para receber pointerup/pointercancel mesmo quando o ponteiro termina fora do clip.
+
+### 🧩 Compatibilidade
+- [COMPATIBILITY] O catálogo de fontes do sistema usa `fc-list` em Linux; se fontconfig não estiver disponível, o app recorre a uma lista de famílias comuns. No Windows, usa a coleção de fontes do sistema.
+- [COMPATIBILITY] A compatibilidade de WASD depende de estar no Scene Editor 3D e ter a câmera selecionada; sem a câmera selecionada, W/E/R continuam escolhendo ferramentas de transformação.
 
 ## 2.4.12 — 2026-10-11
 

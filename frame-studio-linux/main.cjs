@@ -685,6 +685,49 @@ const FONT_META = {
   '.otf': { mime: 'font/otf', format: 'opentype' },
   '.woff2': { mime: 'font/woff2', format: 'woff2' }
 };
+async function enumerateSystemFonts() {
+  const fallback = [
+    'Arial', 'Arial Black', 'Calibri', 'Cambria', 'Comic Sans MS', 'Consolas',
+    'Courier New', 'Georgia', 'Impact', 'Inter', 'Liberation Sans', 'Liberation Serif',
+    'Noto Sans', 'Noto Serif', 'Roboto', 'Tahoma', 'Times New Roman', 'Trebuchet MS',
+    'Verdana', 'monospace', 'sans-serif', 'serif'
+  ];
+  let output = '';
+  if (process.platform === 'win32') {
+    const script = "Add-Type -AssemblyName System.Drawing; $collection = New-Object System.Drawing.Text.InstalledFontCollection; $collection.Families | ForEach-Object { $_.Name }; $collection.Dispose()";
+    try {
+      const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+        encoding: 'utf8', timeout: 20000, maxBuffer: 8 * 1024 * 1024, windowsHide: true
+      });
+      output = String(result.stdout || '');
+    } catch (error) {
+      console.warn('Could not enumerate Windows system fonts:', error?.message || error);
+    }
+  } else {
+    try {
+      const result = await execFileAsync('fc-list', ['--format=%{family}\n'], {
+        encoding: 'utf8', timeout: 12000, maxBuffer: 8 * 1024 * 1024
+      });
+      output = String(result.stdout || '');
+    } catch (error) {
+      console.warn('fontconfig is unavailable; using common fallback font names:', error?.message || error);
+    }
+  }
+  const names = new Set();
+  for (const rawLine of output.split(/\r?\n/)) {
+    for (const part of rawLine.split(',')) {
+      const family = part.replace(/\s+/g, ' ').trim();
+      if (family && family.length <= 100 && !/[\u0000-\u001f]/.test(family)) names.add(family);
+    }
+  }
+  const source = names.size ? [...names] : fallback;
+  return source.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).slice(0, 2000);
+}
+ipcMain.handle('frame:list-system-fonts', async event => {
+  assertTrustedSender(event);
+  return enumerateSystemFonts();
+});
+
 ipcMain.handle('frame:list-custom-fonts', async event => {
   assertTrustedSender(event);
   return (await readCustomFontIndex()).map(({ id, family, ext, bytes }) => ({ id, family, ext, bytes, format: FONT_META[ext].format }));

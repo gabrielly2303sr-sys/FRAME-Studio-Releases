@@ -1,4 +1,4 @@
-# FRAME Studio 2.4.13 — Windows and Linux release kit
+# FRAME Studio 2.4.14 — Windows and Linux release kit
 
 FRAME Studio is an Electron-based local video and motion-graphics editor. This kit adds **in-app update checks** for the installed Windows NSIS build and Linux AppImage, using the public GitHub Releases repository:
 
@@ -56,3 +56,10 @@ Existing releases such as `v2.4.11` and the failed `v2.4.12` release are not cha
 ## Tests
 
 Run `npm test` in `frame-studio-linux` after dependencies are installed. These source tests cover editor code paths and updater configuration; they do not replace testing a packaged build on real Windows/Linux systems.
+
+
+## Release notes and version tags (2.4.14+)
+
+Use `.github/release.yml` to categorize GitHub-generated release notes by PR labels (`bug`, `feature`, `improvement`, `removed`, `compatibility`, and documentation/maintenance labels). Use `.github/RELEASE_TEMPLATE.md` as a checklist when writing release notes manually. GitHub category matching relies on pull-request labels; commits or unlabelled PRs may appear under “Other changes”.
+
+The 2.4.14 release adds system-installed font enumeration, robust timeline drop/pointer handling, and WASD/QE controls for a selected 3D camera. Runtime verification on actual Windows/Linux GUI sessions is still required before distributing the binaries.

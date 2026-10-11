@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('frameAPI', {
   selectMediaFiles: () => ipcRenderer.invoke('frame:select-media'),
   selectCustomizationBackground: () => ipcRenderer.invoke('frame:select-custom-background'),
   importFontsZip: () => ipcRenderer.invoke('frame:import-fonts-zip'),
+  listSystemFonts: () => ipcRenderer.invoke('frame:list-system-fonts'),
   listCustomFonts: () => ipcRenderer.invoke('frame:list-custom-fonts'),
   readCustomFont: (id) => ipcRenderer.invoke('frame:read-custom-font', id),
   getPathForFile: (file) => {

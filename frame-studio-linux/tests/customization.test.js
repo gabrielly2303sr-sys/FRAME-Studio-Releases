@@ -29,4 +29,4 @@ assert.match(preload, /selectCustomizationBackground: \(\) => ipcRenderer\.invok
 assert.match(main, /ipcMain\.handle\('frame:select-custom-background'/);
 assert.match(main, /assertTrustedSender\(event\)/);
 assert.match(installer, /customization\.js/);
-console.log('FRAME Studio 2.4.12 customization tests: OK');
+console.log('FRAME Studio 2.4.14 customization tests: OK');
