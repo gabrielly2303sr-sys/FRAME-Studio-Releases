@@ -1,5 +1,29 @@
 # FRAME Studio Changelog
 
+## 2.4.16
+
+### [FIXED]
+- Animated GIFs are decoded into timed frames so playback, timeline preview, and frame rendering can use the correct animation frame.
+- Corrected the Scene Editor camera basis used for projected scene coordinates.
+- Selecting an effect now scrolls its property into view and briefly highlights the target control.
+
+### [ADDED]
+- Turbulent Displace and Crumpled Paper image effects.
+- Overshoot, Bounce, Elastic, and configurable Steps interpolation curves.
+- Step curve controls for the number of steps and jump position.
+
+### [IMPROVED]
+- Effect categories separate blur types and glow types; Pixelate Blur uses larger nearest-neighbor blocks, and Inner Glow boosts the source image's existing colors.
+- GIF decoder now limits total decoded pixel storage to help prevent excessive memory usage.
+- Updated app title/version and categorized changelog for this release.
+
+### [REMOVED]
+- Experimental GLB/glTF model-import UI and runtime were removed because the current Scene Editor cannot treat imported meshes as native shared-scene geometry. Legacy projects that reference those assets show missing/unsupported media instead of pretending the models are usable.
+
+### [COMPATIBILITY]
+- Existing project schema remains compatible; unknown/legacy effects and assets are not destructively rewritten.
+- GIF decoding stores full composited frames; very large animations may be rejected with an explanatory message to protect memory.
+
 ## 2.4.15
 
 ### [ADDED]

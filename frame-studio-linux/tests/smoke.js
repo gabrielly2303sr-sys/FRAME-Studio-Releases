@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.15', 'package version');
+assert.equal(pkg.version, '2.4.16', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -32,7 +32,7 @@ for (const required of [
   'application/x-frame-asset', 'frameAPI.checkExportTools', 'frameAPI.beginFrameExport', 'frameAPI.writeExportFrame', 'frameAPI.finishFrameExport', 'onExportProgress'
  ]) assert.ok(html.includes(required) || preload.includes(required), `recurso ausente: ${required}`);
 
-// Feature wiring checks for the 2.4.15 editor update. These verify that the
+// Feature wiring checks for the 2.4.16 editor update. These verify that the
 // controls and the renderer/persistence entry points are present; they do not
 // replace a manual GUI interaction test in a real Electron window.
 for (const required of [
@@ -44,7 +44,7 @@ for (const required of [
   'id="colorizeenabled"', 'id="gradientenabled"', 'id="blendmode"',
   'function updateLayerFill(', 'function maskGeometryForClip(', 'function updateMaskTransformOverlay(',
   'groups:layerGroups', 'version:9', '.tl-scroll{overflow:auto', '.timeline{overscroll-behavior:contain', 'function zoomTimelineAtPointer(', 'function timelineTrackGeometry(', 'function applyTrackLayoutOnly(', 'function sceneCameraBasis(', 'function sceneProjectPoint(', 'function attachSceneViewportNavigation(', 'function renderSceneCameraGizmo(', 'id="recordaudio"', 'id="extractaudio"', 'frameAPI.generateWaveform', 'frameAPI.saveAudioRecording', 'frameAPI.extractAudio'
-]) assert.ok(html.includes(required), `integração 2.4.15 ausente: ${required}`);
+]) assert.ok(html.includes(required), `integração 2.4.16 ausente: ${required}`);
 assert.doesNotMatch(renderer, /if\(track>0\)timelineTargetTrack=track/, 'arrastar mídia não pode prender o destino nas próximas inserções');
 assert.match(renderer, /const timelineDrop=\(e\)=>\{[\s\S]*?addClip\(a,\{start:x,\.\.\.\(track===null\?\{\}:\{track\}\)\}\);/, 'drop de mídia deve passar a faixa como destino só desta inserção');
 assert.match(preload, /saveVideo:\s*\(name, buffer/, 'a API legada deve continuar explícita sem ser usada pelo novo renderer');
@@ -340,7 +340,7 @@ const cameraContext = vm.createContext({
   Math, Number
 });
 vm.runInContext([
-  sourceLine('bezierCoord'), sourceLine('bezierEase'), sourceLine('cameraAtTime'),
+  sourceLine('bezierCoord'), sourceLine('easeValue'), sourceLine('bezierCurveEase'), sourceLine('bezierEase'), sourceLine('cameraAtTime'),
   sourceLine('rotateVector'), sourceLine('inverseCameraRotate'), sourceLine('cameraRenderPoseAtTime'), sourceLine('cameraProject')
 ].join('\n'), cameraContext);
 const center = vm.runInContext('cameraProject({x:0,y:0,z:0})', cameraContext);
