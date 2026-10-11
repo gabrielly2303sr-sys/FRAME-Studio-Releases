@@ -1,0 +1,116 @@
+name: Build and publish FRAME Studio
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Windows NSIS installer
+    runs-on: windows-latest
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify release tag matches package version
+        working-directory: frame-studio-linux
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $tagVersion = $env:RELEASE_TAG.TrimStart('v')
+          $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+          if ($tagVersion -ne $packageVersion) { throw "Release tag $env:RELEASE_TAG does not match package version $packageVersion." }
+      - name: Install dependencies
+        working-directory: frame-studio-linux
+        run: npm install --no-audit --no-fund
+      - name: Build auto-updatable NSIS installer
+        working-directory: frame-studio-linux
+        run: npx electron-builder --win nsis --x64 --publish never
+      - name: Verify update metadata
+        shell: pwsh
+        working-directory: frame-studio-linux
+        run: |
+          if (!(Test-Path "dist/latest.yml")) { throw "dist/latest.yml was not generated. Check the electron-builder publish configuration." }
+          if (!(Get-ChildItem "dist" -Filter "*-Setup-x64.exe" | Select-Object -First 1)) { throw "Windows NSIS installer was not generated." }
+      - name: Upload Windows release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-update-assets
+          if-no-files-found: error
+          path: |
+            frame-studio-linux/dist/*-Setup-x64.exe
+            frame-studio-linux/dist/*.blockmap
+            frame-studio-linux/dist/latest.yml
+
+  build-linux:
+    name: Linux AppImage, DEB, and RPM
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg rpm libfuse2
+      - name: Install dependencies
+        working-directory: frame-studio-linux
+        run: npm install --no-audit --no-fund
+      - name: Build Linux packages
+        working-directory: frame-studio-linux
+        run: npx electron-builder --linux AppImage deb rpm --x64 --publish never
+      - name: Verify AppImage update metadata
+        working-directory: frame-studio-linux
+        run: test -s dist/latest-linux.yml
+      - name: Upload Linux release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-update-assets
+          if-no-files-found: error
+          path: |
+            frame-studio-linux/dist/*.AppImage
+            frame-studio-linux/dist/*.deb
+            frame-studio-linux/dist/*.rpm
+            frame-studio-linux/dist/latest-linux.yml
+
+  publish-assets:
+    name: Attach installers to the GitHub Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows assets
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-update-assets
+          path: release-assets/windows
+      - name: Download Linux assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-update-assets
+          path: release-assets/linux
+      - name: Upload installers and updater metadata to this release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/windows/*-Setup-x64.exe
+            release-assets/windows/*.blockmap
+            release-assets/windows/latest.yml
+            release-assets/linux/*.AppImage
+            release-assets/linux/*.deb
+            release-assets/linux/*.rpm
+            release-assets/linux/latest-linux.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

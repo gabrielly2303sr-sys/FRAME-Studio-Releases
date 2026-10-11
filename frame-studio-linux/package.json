@@ -1,0 +1,113 @@
+{
+  "name": "frame-studio",
+  "version": "2.4.12",
+  "private": true,
+  "description": "Local video and motion graphics editor with automatic updates, multilayer timeline, keyframes, effects, and time remapping",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node tests/smoke.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js",
+    "build:win": "electron-builder --win nsis portable --publish never",
+    "build:linux": "electron-builder --linux AppImage deb rpm --publish never",
+    "build": "electron-builder",
+    "build:win:installer": "electron-builder --win nsis --x64 --publish never",
+    "build:win:portable": "electron-builder --win portable --x64 --publish never",
+    "build:linux:appimage": "electron-builder --linux AppImage --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.frame.studio",
+    "productName": "FRAME Studio",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "media-export.cjs",
+      "index.html",
+      "customization.js",
+      "package.json"
+    ],
+    "artifactName": "FRAME-Studio-${version}-${platform}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "FRAME-Studio-${version}-Setup-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "FRAME-Studio-${version}-Portable-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "AudioVideo",
+      "artifactName": "FRAME-Studio-${version}-${arch}.${ext}",
+      "desktop": {
+        "Name": "FRAME Studio",
+        "Comment": "Local video and motion graphics editor"
+      }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gabrielly2303sr-sys",
+        "repo": "FRAME-Studio-Releases",
+        "releaseType": "release"
+      }
+    ],
+    "deb": {
+      "depends": [
+        "ffmpeg"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "ffmpeg"
+      ]
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  }
+}
