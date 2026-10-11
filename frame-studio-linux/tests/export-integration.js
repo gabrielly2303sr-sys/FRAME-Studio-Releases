@@ -169,7 +169,7 @@ async function main() {
     );
     assert.equal(await fs.access(canceledSequencePath).then(() => true, () => false), false, 'cancelamento da sequência deve remover o MP4 parcial');
 
-    console.log('FRAME Studio 2.4.14 export integration tests: OK');
+    console.log('FRAME Studio 2.4.15 export integration tests: OK');
     console.log('Generated and validated with ffprobe: deterministic 10 FPS H.264 + AAC sequence (CRF 23), silent H.264 sequence (CRF 28), reverse/freeze Time Remap audio, and compatibility transcodes.');
     console.log('Verified: final FPS and duration, audio presence/absence, codecs, progress, missing FFmpeg, corrupt input, and cancellation on both export paths.');
   } finally {

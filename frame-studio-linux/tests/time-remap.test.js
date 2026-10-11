@@ -29,4 +29,4 @@ assert.equal(vm.runInContext('sourceRateAt(clip,5)',context),0,'hold segments pr
 const linear = {id:'linear',start:0,inPoint:3,outPoint:7,speed:1,timeRemap:[]};
 context.clip=linear;
 assert.equal(vm.runInContext('sourceTimeAt(clip,2)',context),5,'normal playback remains linear and source-time accurate');
-console.log('FRAME Studio 2.4.14 Time Remapping tests: OK');
+console.log('FRAME Studio 2.4.15 Time Remapping tests: OK');

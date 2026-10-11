@@ -32,7 +32,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build auto-updatable NSIS installer
         working-directory: frame-studio-linux
-        run: npx electron-builder --win nsis --x64 --publish never
+        run: npm run build:win:installer
       - name: Verify update metadata
         shell: pwsh
         working-directory: frame-studio-linux
@@ -68,7 +68,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build Linux packages
         working-directory: frame-studio-linux
-        run: npx electron-builder --linux AppImage deb rpm --x64 --publish never
+        run: npm run build:linux
       - name: Verify AppImage update metadata
         working-directory: frame-studio-linux
         run: test -s dist/latest-linux.yml

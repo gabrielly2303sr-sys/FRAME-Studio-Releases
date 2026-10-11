@@ -1,22 +1,25 @@
 {
   "name": "frame-studio",
-  "version": "2.4.14",
+  "version": "2.4.15",
   "private": true,
   "description": "Local video and motion graphics editor with automatic updates, multilayer timeline, keyframes, effects, and time remapping",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/smoke.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.14-feature-regressions.test.js",
+    "test": "node tests/smoke.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.15-advanced-effects.test.js",
     "build:win": "electron-builder --win nsis portable --publish never",
     "build:linux": "electron-builder --linux AppImage deb rpm --publish never",
     "build": "electron-builder",
     "build:win:installer": "electron-builder --win nsis --x64 --publish never",
     "build:win:portable": "electron-builder --win portable --x64 --publish never",
-    "build:linux:appimage": "electron-builder --linux AppImage --x64 --publish never"
+    "build:linux:appimage": "electron-builder --linux AppImage --x64 --publish never",
+    "build:vendor": "esbuild model-runtime.js --bundle --format=iife --platform=browser --target=chrome120 --outfile=frame-model-runtime.bundle.js",
+    "prepare": "npm run build:vendor"
   },
   "devDependencies": {
     "electron": "^35.7.5",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "25.1.8",
+    "esbuild": "^0.25.0"
   },
   "build": {
     "appId": "com.frame.studio",
@@ -31,6 +34,8 @@
       "media-export.cjs",
       "index.html",
       "customization.js",
+      "model-runtime.js",
+      "frame-model-runtime.bundle.js",
       "package.json"
     ],
     "artifactName": "FRAME-Studio-${version}-${platform}-${arch}.${ext}",
@@ -83,10 +88,6 @@
       ],
       "category": "AudioVideo",
       "artifactName": "FRAME-Studio-${version}-${arch}.${ext}",
-      "desktop": {
-        "Name": "FRAME Studio",
-        "Comment": "Local video and motion graphics editor"
-      },
       "maintainer": "Gabrielly <gabrielly2303sr-sys@users.noreply.github.com>"
     },
     "publish": [
@@ -105,7 +106,8 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.6.2"
+    "electron-updater": "^6.6.2",
+    "three": "^0.176.0"
   },
   "homepage": "https://github.com/gabrielly2303sr-sys/FRAME-Studio-Releases",
   "author": {

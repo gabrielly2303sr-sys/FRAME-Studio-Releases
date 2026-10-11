@@ -9,7 +9,21 @@ APPS_DIR="$HOME/.local/share/applications"
 BIN_DIR="$HOME/.local/bin"
 
 mkdir -p "$INSTALL_DIR" "$APPS_DIR" "$BIN_DIR"
-cp "$SRC_DIR/package.json" "$SRC_DIR/main.cjs" "$SRC_DIR/preload.cjs" "$SRC_DIR/media-export.cjs" "$SRC_DIR/index.html" "$SRC_DIR/customization.js" "$INSTALL_DIR/"
+
+# The 3D model importer runs a bundled Three.js + GLTFLoader runtime. Build it
+# from the local package dependencies when a source checkout/ZIP has no bundle.
+if [[ ! -s "$SRC_DIR/frame-model-runtime.bundle.js" ]] && command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  echo "Preparing the GLB/glTF model runtime..."
+  if (cd "$SRC_DIR" && npm install --ignore-scripts --no-audit --no-fund && npm run build:vendor); then
+    echo "3D model runtime prepared."
+  else
+    echo "Warning: could not prepare the GLB/glTF runtime. Other editor features can still work, but 3D model import will be unavailable." >&2
+  fi
+fi
+cp "$SRC_DIR/package.json" "$SRC_DIR/main.cjs" "$SRC_DIR/preload.cjs" "$SRC_DIR/media-export.cjs" "$SRC_DIR/index.html" "$SRC_DIR/customization.js" "$SRC_DIR/model-runtime.js" "$INSTALL_DIR/"
+if [[ -s "$SRC_DIR/frame-model-runtime.bundle.js" ]]; then
+  cp "$SRC_DIR/frame-model-runtime.bundle.js" "$INSTALL_DIR/"
+fi
 
 # Prefer the Electron package maintained by Arch/CachyOS. This avoids npm's
 # install-script approval issue and uses a system-updated runtime.

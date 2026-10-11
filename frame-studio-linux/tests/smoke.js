@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.14', 'package version');
+assert.equal(pkg.version, '2.4.15', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -32,7 +32,7 @@ for (const required of [
   'application/x-frame-asset', 'frameAPI.checkExportTools', 'frameAPI.beginFrameExport', 'frameAPI.writeExportFrame', 'frameAPI.finishFrameExport', 'onExportProgress'
  ]) assert.ok(html.includes(required) || preload.includes(required), `recurso ausente: ${required}`);
 
-// Feature wiring checks for the 2.4.14 editor update. These verify that the
+// Feature wiring checks for the 2.4.15 editor update. These verify that the
 // controls and the renderer/persistence entry points are present; they do not
 // replace a manual GUI interaction test in a real Electron window.
 for (const required of [
@@ -44,7 +44,7 @@ for (const required of [
   'id="colorizeenabled"', 'id="gradientenabled"', 'id="blendmode"',
   'function updateLayerFill(', 'function maskGeometryForClip(', 'function updateMaskTransformOverlay(',
   'groups:layerGroups', 'version:9', '.tl-scroll{overflow:auto', '.timeline{overscroll-behavior:contain', 'function zoomTimelineAtPointer(', 'function timelineTrackGeometry(', 'function applyTrackLayoutOnly(', 'function sceneCameraBasis(', 'function sceneProjectPoint(', 'function attachSceneViewportNavigation(', 'function renderSceneCameraGizmo(', 'id="recordaudio"', 'id="extractaudio"', 'frameAPI.generateWaveform', 'frameAPI.saveAudioRecording', 'frameAPI.extractAudio'
-]) assert.ok(html.includes(required), `integração 2.4.14 ausente: ${required}`);
+]) assert.ok(html.includes(required), `integração 2.4.15 ausente: ${required}`);
 assert.doesNotMatch(renderer, /if\(track>0\)timelineTargetTrack=track/, 'arrastar mídia não pode prender o destino nas próximas inserções');
 assert.match(renderer, /const timelineDrop=\(e\)=>\{[\s\S]*?addClip\(a,\{start:x,\.\.\.\(track===null\?\{\}:\{track\}\)\}\);/, 'drop de mídia deve passar a faixa como destino só desta inserção');
 assert.match(preload, /saveVideo:\s*\(name, buffer/, 'a API legada deve continuar explícita sem ser usada pelo novo renderer');
@@ -151,7 +151,7 @@ assert.equal(playbackContext.playing, true, 'uma rejeição atrasada não pode p
 
 // Exercise the real toggle handler: playback must start synchronously even if
 // AudioContext.resume() never resolves, and pressing Play at the project end restarts at zero.
-const toggleBlock = renderer.match(/function togglePlay\(\)\{[\s\S]*?\n\}\nfunction updateInspector/)?.[0].replace(/\nfunction updateInspector$/, '');
+const toggleBlock = renderer.match(/function togglePlay\(\)\{[\s\S]*?\n\}\n(?:const frameEffectCatalog|function updateInspector)/)?.[0].replace(/\n(?:const frameEffectCatalog|function updateInspector)$/, '');
 assert.ok(toggleBlock, 'função togglePlay encontrada');
 const toggleContext = vm.createContext({
   offlineRendering:false, exportStarting:false, previewMode:'timeline', sourcePlaying:false, playing:false, playStarting:false,
@@ -170,7 +170,7 @@ toggleContext.playhead=1;vm.runInContext('togglePlay()', toggleContext);
 assert.equal(toggleContext.playing, true, 'Play deve voltar a funcionar após uma pausa ou fim de mídia');
 
 // Exercise the real shortcut handlers with focused controls, editable fields and dialogs.
-const handlerBlock = renderer.match(/let spaceShortcutKeyHandled=false;[\s\S]*?window\.addEventListener\('blur',[^\n]*\);/)[0];
+const handlerBlock = renderer.match(/let spaceShortcutKeyHandled=false;[\s\S]*?window\.addEventListener\('blur',\(\)=>\{spaceShortcutKeyHandled=false\},true\);/)[0];
 const keyboardContext = vm.createContext({
   shortcuts: { play: 'Space', split: 's' },
   canonicalKey: e => { const bits=[]; if(e.ctrlKey||e.metaKey)bits.push('Ctrl');if(e.altKey)bits.push('Alt');if(e.shiftKey)bits.push('Shift');let key=e.key;if(key===' ')key='Space';else if(key==='Escape')key='Esc';else if(key.length===1)key=key.toLowerCase();else key=key[0].toUpperCase()+key.slice(1);if(['Control','Shift','Alt','Meta'].includes(key))return '';bits.push(key);return bits.join('+') },
@@ -341,7 +341,7 @@ const cameraContext = vm.createContext({
 });
 vm.runInContext([
   sourceLine('bezierCoord'), sourceLine('bezierEase'), sourceLine('cameraAtTime'),
-  sourceLine('rotateVector'), sourceLine('inverseCameraRotate'), sourceLine('cameraProject')
+  sourceLine('rotateVector'), sourceLine('inverseCameraRotate'), sourceLine('cameraRenderPoseAtTime'), sourceLine('cameraProject')
 ].join('\n'), cameraContext);
 const center = vm.runInContext('cameraProject({x:0,y:0,z:0})', cameraContext);
 assert.ok(center && Math.abs(center.x - 640) < 0.01 && Math.abs(center.y - 360) < 0.01, 'a câmera padrão deve projetar a origem no centro do canvas');

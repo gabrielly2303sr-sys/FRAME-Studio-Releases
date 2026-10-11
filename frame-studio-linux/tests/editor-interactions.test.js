@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const renderer = html.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] || '';
+const renderer = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] || '';
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
 // Exercise the independent timeline track geometry with saved/default heights.

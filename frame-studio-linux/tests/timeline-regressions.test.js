@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.14');
+assert.equal(pkg.version, '2.4.15');
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 
 // Keep source-time mapping independent of the visual scale and timeline start.
@@ -52,7 +52,7 @@ assert.match(renderer, /frameAPI\.generateWaveform\(asset\.path,Number\(asset\.d
 assert.match(renderer, /info\.streams\?\.some\(stream=>stream\.codec_type==='audio'\)/, 'new video import detects real audio streams');
 assert.match(renderer, /function applyTrackLayoutOnly\(/, 'track height uses its own layout function');
 assert.match(renderer, /className='track-resize-grip'/, 'track resizing has dedicated handles');
-assert.doesNotMatch(html, /id=["'](?:groupclips|groupmask|ungroupclips|selectgroup|entergroup|exitgroupview|togglegroup|grouptransform)["']/, 'grouping controls are removed in 2.4.14');
+assert.doesNotMatch(html, /id=["'](?:groupclips|groupmask|ungroupclips|selectgroup|entergroup|exitgroupview|togglegroup|grouptransform)["']/, 'grouping controls are removed in 2.4.15');
 assert.match(renderer, /function stripLegacyGroupMetadata\(/, 'legacy groups are flattened when older projects are loaded');
 assert.match(renderer, /legacyGroupTransforms/, 'legacy group transforms are retained as per-layer transforms where possible');
 assert.match(renderer, /function sourceTimeAt\(c,timelineTime\)/, 'the time-remapping curve drives source-frame selection');
@@ -62,4 +62,4 @@ assert.match(renderer, /case'freeze-point'/, 'Freeze at Playhead preset is imple
 assert.match(renderer, /wrap\.addEventListener\('dblclick'/, 'preview double-click text editing is wired');
 assert.match(renderer, /selectTab\('text'\)/, 'double-click text editing opens the text panel');
 assert.match(html, /id="proportionalscale"/, 'proportional scale control exists');
-console.log('FRAME Studio 2.4.14 timeline regression tests: OK');
+console.log('FRAME Studio 2.4.15 timeline regression tests: OK');

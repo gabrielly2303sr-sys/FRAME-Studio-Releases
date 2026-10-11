@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.14');
+assert.equal(pkg.version, '2.4.15');
 for (const id of ['groupclips','groupmask','ungroupclips','selectgroup','entergroup','exitgroupview','togglegroup','grouptransform','groupmasktoggle']) {
   assert.doesNotMatch(html, new RegExp(`id=["']${id}["']`), `grouping UI control ${id} should be removed`);
 }
@@ -36,4 +36,4 @@ assert.equal(data.clips[0].groupId, undefined);
 assert.equal(data.clips[0].groupName, undefined);
 assert.equal(data.clips[0].legacyGroupTransforms[0].x, 50);
 assert.equal(data.clips[0].legacyGroupTransforms[0].opacity, 80);
-console.log('FRAME Studio 2.4.14 legacy grouping removal tests: OK');
+console.log('FRAME Studio 2.4.15 legacy grouping removal tests: OK');
