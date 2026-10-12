@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.17', 'package version');
+assert.equal(pkg.version, '2.4.18', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -98,7 +98,7 @@ assert.equal(endedMedia.paused, true, 'o source deve manter-se parado enquanto a
 assert.ok(Math.abs(endedMedia.currentTime - (1 - 0.25/30)) < 0.002, 'o source deve ficar no último frame seguro');
 
 // A real HTMLMediaElement `ended` event must not turn off the project clock.
-const endedHandlerBlock = renderer.match(/function handleMediaEnded\(asset\)\{[\s\S]*?\n\}\nfunction syncMedia/)?.[0].replace(/\nfunction syncMedia$/, '');
+const endedHandlerBlock = renderer.match(/function handleMediaEnded\(asset\)\{[\s\S]*?\n\}\nfunction seekVideoPreviewTo/)?.[0].replace(/\nfunction seekVideoPreviewTo$/, '');
 assert.ok(endedHandlerBlock, 'função handleMediaEnded encontrada');
 const endedHandlerContext = vm.createContext({
   offlineRendering:false, previewMode:'timeline', sourcePreviewId:null, sourcePlaybackEpoch:7, sourcePlaying:false,

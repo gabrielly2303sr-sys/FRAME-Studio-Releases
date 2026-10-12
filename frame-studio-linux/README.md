@@ -1,15 +1,18 @@
-# FRAME Studio 2.4.17 — Performance & Export Update
+# FRAME Studio 2.4.18 — Live Preview & Downloader
 
-FRAME Studio is a local Electron video and motion-graphics editor. This folder contains source code, not a prebuilt installer.
+This folder contains the Electron source code. It is not a prebuilt installer.
 
-## 2.4.17
+## 2.4.18
 
-- Fast, low-resolution timeline scrubbing with a bounded, short-lived frame cache and full-resolution redraw after the playhead is released or held still.
-- A 128 MiB estimated RGBA texture-cache budget with LRU eviction.
-- Precomputed noise fields for Turbulent Displace and Crumpled Paper.
-- Softer outer-glow edges and a more gradual source-color Inner Glow.
-- Scene Editor Y coordinate correction to stop layer contents rendering upside down.
-- MP4 export settings for 480p through 4K, FPS, CRF or target bitrate, H.264 encoder speed, and AAC audio bitrate.
+- Live timeline scrubbing: retains the last decoded video frame while a seek is pending, coalesces redraws to animation frames, uses `fastSeek` during drag when available, and requests a final accurate seek on release.
+- Fixes preview rendering paths that otherwise returned before composing the current timeline frame while a video was seeking.
+- Double-click text editing remains wired to selection and the text content field.
+- Easing controls support bounded draggable handles for Bounce, Elastic, and Steps.
+- Adds a YouTube downloader pane for authorized public content, with MP4/MP3 output and resolution/FPS options.
+
+## Downloader requirements
+
+The downloader requires system-installed `yt-dlp` and `ffmpeg`. On CachyOS/Arch: `sudo pacman -S yt-dlp ffmpeg`. The app requires a rights/permission confirmation and does not provide DRM or access-restriction bypass functionality. Only save content you own or have explicit permission/a license to download. Availability and format selection depend on the source video and the installed yt-dlp version.
 
 ## Build and test
 
@@ -21,16 +24,15 @@ npm test
 npm run build:linux
 ```
 
-For Windows, run `BUILD-WINDOWS.bat`. The package pins Electron Builder 25.1.8.
+On Windows, run `BUILD-WINDOWS.bat`. Electron Builder is pinned to version 25.1.8.
 
 ## Notes and limitations
 
-- Electron remains Chromium/V8-based. TypeScript improves typing and maintenance but does not turn this project into a native runtime. This release focuses on the current hot paths.
-- Automated tests cover deterministic MP4 encoding and new export options, but the full GUI, scrubbing smoothness, and high-resolution performance still require manual testing in packaged builds.
-- 4K resolution and slower encoding presets need substantially more time and memory.
-- AppImage is the recommended standalone Linux download; some distributions need FUSE 2 compatibility. `.deb` and `.rpm` should follow their package manager's update flow.
-- System fonts, supported effects, and external media still depend on what is installed and readable on the host computer.
+- This remains an Electron/Chromium/V8 application; JavaScript is interpreted/JIT-compiled by V8. The update improves scheduling and decoded-frame reuse rather than changing the runtime architecture.
+- The timeline preview may show the last decoded frame briefly while seeking. Intermediate frames can still be skipped by long-GOP or slow-to-seek codecs.
+- The downloader UI and IPC require a real GUI test on Linux/Windows.
+- AppImage is the recommended standalone Linux package; some distributions need FUSE 2 compatibility. `.deb` and `.rpm` packages should be updated through their package manager.
 
-## GitHub Release and automatic-update metadata
+## GitHub Release and auto-update metadata
 
-The `.github/workflows/release.yml` workflow builds packages when a Release is published. The published Windows installer needs `latest.yml` and its `.blockmap`; the Linux AppImage update path needs `latest-linux.yml`. Check the Assets section and confirm both platform builds before announcing automatic updates.
+The `.github/workflows/release.yml` workflow builds when a Release is published. Verify `latest.yml`, `.blockmap`, `latest-linux.yml`, and both platform jobs before announcing automatic updates.

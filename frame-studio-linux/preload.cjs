@@ -28,6 +28,15 @@ contextBridge.exposeInMainWorld('frameAPI', {
   generateWaveform: (path, duration) => ipcRenderer.invoke('frame:generate-waveform', { path, duration }),
   saveAudioRecording: (buffer, name, extension) => ipcRenderer.invoke('frame:save-audio-recording', { buffer, name, extension }),
   extractAudio: (payload) => ipcRenderer.invoke('frame:extract-audio', payload),
+  checkYoutubeTools: () => ipcRenderer.invoke('frame:youtube-tools-status'),
+  downloadYoutube: (payload) => ipcRenderer.invoke('frame:youtube-download', payload),
+  cancelYoutubeDownload: () => ipcRenderer.send('frame:youtube-cancel'),
+  onYoutubeDownloadProgress: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('frame:youtube-download-progress', listener);
+    return () => ipcRenderer.removeListener('frame:youtube-download-progress', listener);
+  },
   selectMediaFiles: () => ipcRenderer.invoke('frame:select-media'),
   selectCustomizationBackground: () => ipcRenderer.invoke('frame:select-custom-background'),
   importFontsZip: () => ipcRenderer.invoke('frame:import-fonts-zip'),

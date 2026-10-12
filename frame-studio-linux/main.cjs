@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
+const activeYoutubeDownloads = new Map();
 const trustedRendererURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
 let microphonePermissionDecision = null;
 
@@ -158,6 +159,125 @@ function setupAutomaticUpdates() {
   startupCheck.unref?.();
   const periodicCheck = setInterval(check, 6 * 60 * 60 * 1000);
   periodicCheck.unref?.();
+}
+
+async function videoDownloaderToolsStatus() {
+  const ytdlpCommand = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const ffmpegCommand = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const check = async (command, args) => {
+    try {
+      const result = await execFileAsync(command, args, { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
+      return { available: true, version: String(result.stdout || '').split(/\r?\n/)[0].trim() };
+    } catch (error) {
+      return { available: false, version: '', reason: error?.code === 'ENOENT' ? 'not-found' : String(error?.message || error).slice(0, 240) };
+    }
+  };
+  const [ytDlp, ffmpeg] = await Promise.all([check(ytdlpCommand, ['--version']), check(ffmpegCommand, ['-version'])]);
+  return { ytDlp: ytDlp.available, ytDlpVersion: ytDlp.version, ffmpeg: ffmpeg.available, ffmpegVersion: ffmpeg.version, platform: process.platform };
+}
+
+function validateYouTubeURL(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); } catch { throw new Error('Enter a valid YouTube video URL.'); }
+  if (url.protocol !== 'https:') throw new Error('Only HTTPS YouTube URLs are accepted.');
+  const host = url.hostname.toLowerCase();
+  const allowed = host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com');
+  if (!allowed) throw new Error('This downloader only accepts youtube.com and youtu.be URLs.');
+  if (url.username || url.password) throw new Error('URLs containing credentials are not allowed.');
+  return url.toString();
+}
+
+function sendYoutubeProgress(sender, data) {
+  if (sender && !sender.isDestroyed()) sender.send('frame:youtube-download-progress', data);
+}
+
+async function runYoutubeDownload(event, payload) {
+  assertTrustedSender(event);
+  if (payload?.authorized !== true) throw new Error('Confirm that you own this content or have permission/a license to download it. Do not bypass DRM or access restrictions.');
+  if (activeYoutubeDownloads.has(event.sender.id)) throw new Error('A YouTube download is already running.');
+  const url = validateYouTubeURL(payload?.url);
+  const format = payload?.format === 'mp3' ? 'mp3' : 'mp4';
+  const allowedResolutions = new Set([360, 480, 720, 1080, 1440, 2160, 4320]);
+  const allowedFps = new Set(['auto', '24', '25', '30', '50', '60', '120']);
+  const maxHeight = Number(payload?.maxHeight);
+  const maxFps = String(payload?.maxFps ?? 'auto');
+  if (!allowedResolutions.has(maxHeight)) throw new Error('Choose a supported maximum resolution.');
+  if (!allowedFps.has(maxFps)) throw new Error('Choose a supported maximum FPS.');
+
+  const tools = await videoDownloaderToolsStatus();
+  if (!tools.ytDlp) throw new Error(process.platform === 'win32'
+    ? 'yt-dlp was not found in PATH. Install yt-dlp.exe and reopen FRAME Studio.'
+    : 'yt-dlp was not found. On CachyOS/Arch, install it with: sudo pacman -S yt-dlp ffmpeg');
+  if (!tools.ffmpeg) throw new Error(process.platform === 'win32'
+    ? 'FFmpeg was not found in PATH. Install FFmpeg and reopen FRAME Studio.'
+    : 'FFmpeg was not found. On CachyOS/Arch, install it with: sudo pacman -S yt-dlp ffmpeg');
+
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const ext = format === 'mp3' ? 'mp3' : 'mp4';
+  const picked = await dialog.showSaveDialog(win, {
+    title: format === 'mp3' ? 'Save YouTube audio' : 'Save YouTube video',
+    defaultPath: path.join(app.getPath('videos'), format === 'mp3' ? 'YouTube Audio.mp3' : 'YouTube Video.mp4'),
+    buttonLabel: 'Download',
+    filters: [{ name: format.toUpperCase(), extensions: [ext] }]
+  });
+  if (picked.canceled || !picked.filePath) return { canceled: true };
+  const outputPath = picked.filePath;
+  const parsed = path.parse(outputPath);
+  const outputTemplate = path.join(parsed.dir, `${parsed.name}.%(ext)s`);
+  const ytdlpCommand = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const args = ['--no-playlist', '--newline', '--progress', '--windows-filenames', '--no-overwrites', '--progress-template', 'download:FRAME_PROGRESS:%(progress._percent_str)s|%(progress.eta)s', '-o', outputTemplate];
+  if (format === 'mp3') {
+    args.push('-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0');
+  } else {
+    const cap = `[height<=${maxHeight}]${maxFps === 'auto' ? '' : `[fps<=${maxFps}]`}`;
+    args.push('-f', `bv*${cap}+ba/b${cap}`, '--merge-output-format', 'mp4', '--remux-video', 'mp4');
+  }
+  args.push('--', url);
+  sendYoutubeProgress(event.sender, { stage: 'starting', percent: 0, format, output: path.basename(outputPath) });
+
+  await new Promise((resolve, reject) => {
+    const child = spawn(ytdlpCommand, args, { cwd: parsed.dir, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    activeYoutubeDownloads.set(event.sender.id, child);
+    let settled = false, lineBuffer = '', lastLog = '';
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      activeYoutubeDownloads.delete(event.sender.id);
+      if (error) reject(error); else resolve();
+    };
+    const processText = text => {
+      lineBuffer += String(text || '');
+      const lines = lineBuffer.split(/\r?\n/);
+      lineBuffer = lines.pop() || '';
+      for (const line of lines) {
+        const progress = line.match(/FRAME_PROGRESS:\s*([\d.]+)%?\s*\|\s*(.*)/);
+        if (progress) {
+          sendYoutubeProgress(event.sender, { stage: 'downloading', percent: Math.max(0, Math.min(100, Number(progress[1]) || 0)), eta: progress[2].trim() });
+        } else if (line.trim()) {
+          lastLog = line.trim().slice(0, 1200);
+          if (/\[Merger\]|\[VideoConvertor\]|\[ExtractAudio\]|Post-process|Deleting original file/i.test(line)) sendYoutubeProgress(event.sender, { stage: 'processing', percent: 100, detail: lastLog });
+        }
+      }
+    };
+    child.stdout.on('data', processText);
+    child.stderr.on('data', processText);
+    child.once('error', error => finish(new Error(error?.code === 'ENOENT' ? 'yt-dlp disappeared from PATH. Install it and restart FRAME Studio.' : `Could not start yt-dlp: ${error?.message || error}`)));
+    child.once('close', code => {
+      if (child.__frameCancelled) {
+        sendYoutubeProgress(event.sender, { stage: 'cancelled', percent: 0 });
+        finish(new Error('Download canceled by user.'));
+        return;
+      }
+      if (code === 0) {
+        sendYoutubeProgress(event.sender, { stage: 'complete', percent: 100, output: path.basename(outputPath), detail: `Saved to ${outputPath}` });
+        finish();
+      } else {
+        sendYoutubeProgress(event.sender, { stage: 'error', percent: 0, detail: lastLog || `yt-dlp exited with code ${code}` });
+        finish(new Error(`Download failed (exit code ${code}). ${lastLog}`));
+      }
+    });
+  });
+  return { canceled: false, path: outputPath, format };
 }
 
 function createWindow() {
@@ -826,3 +946,18 @@ ipcMain.handle('frame:open-path', async (event, target) => {
   if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error('Invalid path.');
   return shell.openPath(target);
 });
+
+ipcMain.handle('frame:youtube-tools-status', async event => {
+  assertTrustedSender(event);
+  return videoDownloaderToolsStatus();
+});
+ipcMain.handle('frame:youtube-download', async (event, payload) => runYoutubeDownload(event, payload));
+ipcMain.on('frame:youtube-cancel', event => {
+  try { assertTrustedSender(event); } catch { return; }
+  const child = activeYoutubeDownloads.get(event.sender.id);
+  if (child && !child.killed) {
+    child.__frameCancelled = true;
+    child.kill('SIGTERM');
+  }
+});
+

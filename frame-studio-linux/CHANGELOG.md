@@ -1,23 +1,26 @@
-# FRAME Studio 2.4.17 — Performance & Export
-
-## [IMPROVED]
-- Timeline scrubbing enters a temporary low-resolution preview mode and re-renders the paused frame at full quality after releasing the playhead.
-- Texture caching now has a byte-based memory cap and recency eviction.
-- Turbulent Displace and Crumpled Paper use precomputed noise fields to cut redundant fractal-noise computation.
-- Softened outer glow compositing and expanded glow padding to reduce hard cut-off edges.
+# FRAME Studio 2.4.18 — Live Preview & Downloader
 
 ## [FIXED]
-- Scene Editor layer imagery now compensates for local texture Y orientation so clips are not rendered upside-down.
+- During timeline scrubbing, retain the last decoded video frame instead of leaving the viewer blank while a new seek is pending. Replace it with the latest decoded frame as soon as the media element is ready.
+- Coalesce timeline preview redraws to a single requestAnimationFrame while dragging and retarget seeks to the latest playhead position.
+- Keep an independent, bounded snapshot of the last decoded video frame so effects/transforms can still be composed during an in-flight seek.
+- Text double-click in the preview selects the best matching active text layer and focuses its content field.
+- Keep the easing graph controls inside the graph bounds and expose configurable controls for Bounce, Elastic, and Steps.
 
 ## [ADDED]
-- MP4 export settings: 480p through 4K, 24–60 FPS presets, CRF or target bitrate, H.264 encoder speed, and AAC audio bitrate.
-- Quick export profiles for draft, social, high quality, and 4K.
+- YouTube downloader tab with MP4 or MP3 output, maximum resolution and FPS controls, progress, cancellation, and a save dialog.
+- Explicit rights/permission confirmation before starting a download.
+
+## [COMPATIBILITY]
+- The downloader invokes system-installed `yt-dlp` and `ffmpeg`; it does not bundle those tools.
+- The downloader does not add cookie, login, DRM bypass, or access-restriction circumvention options. Download only content you own or have explicit permission/a license to save.
 
 ## Notes
-- Electron remains Chromium/V8-based; TypeScript alone does not create a native executable or remove renderer cost.
-- Automated tests pass after implementation; manual Electron GUI and final build validation remain required.
+- Continuous video scrubbing uses the last decoded frame while the next seek is in flight; an exact frame appears when decoding completes. This is a responsive preview strategy, not a guarantee that every intermediate frame can be decoded at display refresh rate.
+- Manual testing in a packaged Electron window remains required for codec-specific seeking, the downloader, and the full update flow.
 
 # FRAME Studio Changelog
+
 
 ## 2.4.16
 
