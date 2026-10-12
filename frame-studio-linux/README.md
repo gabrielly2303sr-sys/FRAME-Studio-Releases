@@ -1,36 +1,26 @@
-# FRAME Studio 2.4.19 — Downloaded Media Library
+# FRAME Studio 2.4.20 — Bundled Tools & Text Editing
 
-This folder contains the Electron source code. It is not a prebuilt installer.
+This directory contains the Electron source code, not a prebuilt installer.
 
-## 2.4.19
+## 2.4.20
 
-- Adds a persistent Downloaded Media library independent of the current project.
-- Create nested folders and select a destination folder before downloading.
-- Downloaded media are stored locally and can be dragged directly from the library to the timeline, or added to the project's Media bin.
-- Official Windows and Linux releases bundle platform-specific `yt-dlp` and FFmpeg executables; development builds can use tools on `PATH`.
-- Uses safe relative-path validation for library browsing and media resolution.
+- Official Windows and Linux builds include yt-dlp and FFmpeg/ffprobe under the app resources directory.
+- Runtime tool discovery prioritizes app-bundled executables, then uses a system fallback for development checkouts.
+- Fixed preview double-click editing by prioritizing the selected active text layer and using a safer text hit-test fallback.
+- Added compact Undo and Redo buttons to the timeline toolbar.
+- Timeline and command buttons show keyboard shortcuts on hover and refresh those hints after customized shortcuts are saved.
 
-## Storage location
+## Bundled downloader and FFmpeg
 
-The desktop app stores downloads in `app.getPath('userData')/Media Library/Downloaded Media`. On Windows this resolves inside the user's AppData profile; on Linux it resolves inside Electron's app-specific user-data directory (normally under the user's config directory). This path persists across projects for the same user. `/Android/data` is an Android-specific location and is not used by this desktop Electron build.
+Release builds download platform-specific executables into `vendor/win` or `vendor/linux` during GitHub Actions. Electron Builder places them in `resources/downloader`, outside `app.asar`, and the main process resolves them using `process.resourcesPath`. In packaged builds, media export and the downloader use these binaries without requiring users to install `yt-dlp` or FFmpeg separately. Developer checkouts may use `vendor/<platform>` binaries or fall back to tools installed on `PATH`.
 
-## Downloader support
+The published Release also includes the update metadata required by Electron Updater: `latest.yml` for the Windows NSIS installer and `latest-linux.yml` for AppImage. `.deb` and `.rpm` installations should be updated through the package manager rather than the AppImage updater.
 
-The release workflow downloads platform-specific binaries before packaging:
-- Linux: standalone `yt-dlp` plus a static FFmpeg/ffprobe build.
-- Windows: `yt-dlp.exe` plus FFmpeg/ffprobe and required DLLs.
-
-Development checkouts first look for `vendor/<platform>` executables, then fall back to `PATH`. Official users do not need to run `sudo pacman -S yt-dlp ffmpeg` when the corresponding packaged tools are present. Only download content you own or are explicitly authorized/licensed to save; do not bypass DRM or access restrictions.
-
-See `THIRD_PARTY_NOTICES.md` for upstream sources and licensing notes. Redistributors must preserve applicable notices and comply with the relevant binary licenses.
-
-## Automatic updates
-
-GitHub Releases publish platform-specific update metadata: `latest.yml` for the Windows NSIS installer and `latest-linux.yml` for Linux AppImage builds. These metadata files must be attached to the same published release as their matching installers. The release workflow verifies that the files are generated before uploading assets. Linux `.deb` and `.rpm` users should update through their package manager rather than the in-app AppImage updater.
+Third-party binaries are retrieved at build time and are not stored in this source ZIP. See `THIRD_PARTY_NOTICES.md` for upstream source URLs and licensing notices; redistributors must preserve applicable notices and meet the licences of the actual binary builds.
 
 ## Build and test
 
-Requires Node.js 22+ and npm. MP4 export integration tests may use FFmpeg/ffprobe from the host environment unless packaged tool paths are configured.
+Requires Node.js 22+ and npm.
 
 ```bash
 npm install --no-audit --no-fund
@@ -38,10 +28,9 @@ npm test
 npm run build:linux
 ```
 
-On Windows, run `BUILD-WINDOWS.bat`. Electron Builder is pinned to version 25.1.8. The GitHub Release workflow prepares the platform-specific downloader tools in `vendor/` before running the build.
+On Windows, run `BUILD-WINDOWS.bat`. The release workflow downloads the matching tools, checks they run, packages them with the app, and verifies the files under the unpacked Electron resources directory.
 
 ## Notes
 
-- The app remains an Electron/Chromium/V8 application; this change does not convert it to a native application.
-- Linux AppImage is the recommended standalone Linux package; some distributions may still need FUSE compatibility support. `.deb` and `.rpm` should be updated through their package manager.
-- A real packaged-UI test is still required on Windows and Linux before announcing the release.
+- The app remains Electron/Chromium/V8; this update does not turn it into a native application.
+- Manual testing of the packed UI remains required for text double-click editing and packaged FFmpeg/downloader execution.

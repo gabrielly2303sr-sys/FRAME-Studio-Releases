@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
-assert.equal(pkg.version, '2.4.19');
+assert.equal(pkg.version, '2.4.20');
 assert.match(main, /function enumerateSystemFonts\(\)/);
 assert.match(main, /frame:list-system-fonts/);
 assert.match(main, /fc-list/);

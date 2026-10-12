@@ -1,3 +1,19 @@
+## 2.4.20
+
+### [FIXED]
+- Double-clicking visible text in the preview prioritizes the selected active text layer and has a more forgiving nearest-layer fallback.
+- Export and downloader tools are resolved from the packaged application resources before system fallbacks.
+
+### [ADDED]
+- Compact Undo and Redo buttons in the timeline toolbar.
+- Hover tooltips with keyboard shortcut hints for timeline actions and commands; hints update when shortcuts are customized.
+
+### [COMPATIBILITY]
+- Official Windows and Linux release builds package yt-dlp, FFmpeg, and ffprobe into `resources/downloader` outside `app.asar`; end users do not need system package-manager installs when these bundled tools are present.
+- Source development checkouts can use local `vendor/<platform>` tools or fall back to system tools.
+
+---
+
 # FRAME Studio Changelog
 
 ## 2.4.19

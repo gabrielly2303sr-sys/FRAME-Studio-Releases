@@ -8,7 +8,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.19');
+assert.equal(pkg.version, '2.4.20');
 
 assert.match(html, /function scheduleScrubPreviewDraw\(/, 'scrub redraw is coalesced per animation frame');
 assert.match(html, /function rememberVideoPreviewFrame\(/, 'a decoded video frame is kept for seek gaps');
@@ -18,7 +18,8 @@ assert.match(html, /function seekVideoPreviewTo\(/, 'scrub seeks have a latest-w
 assert.match(html, /typeof el\.fastSeek==='function'/, 'fast seeks are used during scrubbing when supported');
 assert.match(html, /syncMedia\(true\);previewQualityMode='full'/, 'release from scrubbing re-requests the exact target');
 assert.match(html, /function attachPreviewTextEditing\(/, 'preview double-click text editor remains available');
-assert.match(html, /addEventListener\('dblclick',ev=>\{if\(previewMode!=='timeline'/, 'text edit uses preview double-click');
+assert.match(html, /addEventListener\('dblclick',onDoubleClick,true\)/, 'preview wrapper and canvas share a capture-phase text edit handler');
+assert.match(html, /if\(ranked.length===1\|\|ranked\[0\]\?\.score<=9\)/, 'single visible text layer can be edited even if glyph hit testing misses the double-click');
 
 assert.match(html, /id="ytAuthorized" type="checkbox"/, 'downloader requires visible authorization confirmation');
 assert.match(html, /downloadYoutube\(\{url,authorized:true,format:format\.value/, 'renderer passes authorization and selected formats');
@@ -57,4 +58,4 @@ context.seekVideoPreviewTo(afterDrag, 4.5);
 assert.equal(assigned, 4.5, 'final/non-drag seek should request the accurate currentTime target');
 assert.equal(afterDrag.__framePendingSeek, 4.5);
 
-console.log('FRAME Studio 2.4.19 live preview/downloader checks: OK');
+console.log('FRAME Studio 2.4.20 live preview/downloader checks: OK');
