@@ -1,3 +1,11 @@
+## 2.4.22
+### [FIXED]
+- Linux now bundles standalone `yt-dlp_linux`, avoiding a hidden dependency on system Python.
+- Packaged tool lookup is resilient to Electron/AppImage resource layout differences and missing Linux executable permissions.
+- Downloader diagnostics show the actual tool path and execution failure reason.
+### [IMPROVED]
+- CI extracts the final AppImage and verifies yt-dlp, FFmpeg and ffprobe are present and executable before publishing.
+
 ## 2.4.21
 
 ### [FIXED]
@@ -124,3 +132,11 @@
 
 ### ⚡ Melhorado
 - Timeline drag-and-drop handling and release-note categories.
+
+
+### [FIXED]
+- Linux now bundles standalone `yt-dlp_linux`, avoiding a hidden dependency on system Python.
+- Tool lookup is more resilient to AppImage/resource layout differences and missing executable permissions.
+- The downloader shows the specific tool path/reason when execution fails instead of only a generic missing-tools message.
+### [IMPROVED]
+- CI extracts and validates media tools inside the final AppImage before publishing.

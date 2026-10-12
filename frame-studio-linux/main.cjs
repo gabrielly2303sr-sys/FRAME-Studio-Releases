@@ -167,20 +167,61 @@ function toolFilename(tool) {
   return `${tool}${suffix}`;
 }
 
+const bundledToolPathCache = new Map();
+
+function makeRunnableBundledTool(candidate, tool) {
+  // Artifact transport can strip executable bits from files copied out of an
+  // AppImage/ZIP. Keep the canonical copy inside the package and repair only the
+  // local executable permission in FRAME's own user-data cache when needed.
+  if (process.platform !== 'linux') return candidate;
+  try {
+    fsSync.accessSync(candidate, fsSync.constants.X_OK);
+    return candidate;
+  } catch {}
+  try {
+    const runtimeDir = path.join(app.getPath('userData'), 'runtime-tools');
+    fsSync.mkdirSync(runtimeDir, { recursive: true });
+    const target = path.join(runtimeDir, path.basename(candidate));
+    const sourceStat = fsSync.statSync(candidate);
+    let refresh = true;
+    try {
+      const targetStat = fsSync.statSync(target);
+      refresh = targetStat.size !== sourceStat.size;
+    } catch {}
+    if (refresh) fsSync.copyFileSync(candidate, target);
+    fsSync.chmodSync(target, 0o755);
+    fsSync.accessSync(target, fsSync.constants.X_OK);
+    return target;
+  } catch (error) {
+    console.warn(`Could not prepare bundled tool ${tool} for execution:`, error?.message || error);
+    return null;
+  }
+}
+
 function bundledToolPath(tool) {
+  if (bundledToolPathCache.has(tool)) return bundledToolPathCache.get(tool);
   const filename = toolFilename(tool);
   const platformFolder = process.platform === 'win32' ? 'win' : process.platform === 'linux' ? 'linux' : process.platform;
   const candidates = [];
   if (app.isPackaged && process.resourcesPath) {
     candidates.push(path.join(process.resourcesPath, 'downloader', filename));
+    try { candidates.push(path.join(path.dirname(app.getAppPath()), 'downloader', filename)); } catch {}
+    try { candidates.push(path.join(path.dirname(app.getAppPath()), 'app.asar.unpacked', 'downloader', filename)); } catch {}
   } else {
     candidates.push(path.join(__dirname, 'vendor', platformFolder, filename));
   }
-  for (const candidate of candidates) {
+  for (const candidate of [...new Set(candidates)]) {
     try {
-      if (fsSync.statSync(candidate).isFile()) return candidate;
+      if (!fsSync.statSync(candidate).isFile()) continue;
+      const runnable = makeRunnableBundledTool(candidate, tool);
+      if (runnable) {
+        bundledToolPathCache.set(tool, runnable);
+        return runnable;
+      }
     } catch {}
   }
+  bundledToolPathCache.set(tool, null);
+  console.error(`[FRAME media tools] ${tool} not found. Packaged=${app.isPackaged}; resourcesPath=${process.resourcesPath || '(unset)'}; appPath=${app.getAppPath?.() || '(unknown)'}; checked=${candidates.join(' | ')}`);
   return null;
 }
 
@@ -218,13 +259,13 @@ async function videoDownloaderToolsStatus() {
   const check = async (tool) => {
     const bundledPath = bundledToolPath(tool);
     const command = bundledPath || (app.isPackaged ? null : toolFilename(tool));
-    if (!command) return { available: false, version: '', source: 'missing', reason: 'not-bundled-in-package' };
+    if (!command) return { available: false, version: '', source: 'missing', path: '', reason: 'not found under application resources/downloader or runnable app-data cache' };
     try {
       const result = await execFileAsync(command, ['--version'], { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
       const output = `${result.stdout || ''}\n${result.stderr || ''}`;
-      return { available: true, version: output.split(/\r?\n/).map(line => line.trim()).find(Boolean) || '', source: bundledPath ? 'bundled' : 'system' };
+      return { available: true, version: output.split(/\r?\n/).map(line => line.trim()).find(Boolean) || '', source: bundledPath ? (bundledPath.includes(`${path.sep}runtime-tools${path.sep}`) ? 'bundled-cache' : 'bundled') : 'system', path: command, reason: '' };
     } catch (error) {
-      return { available: false, version: '', source: 'missing', reason: error?.code === 'ENOENT' ? 'not-found' : String(error?.message || error).slice(0, 240) };
+      return { available: false, version: '', source: 'missing', path: command, reason: error?.code === 'ENOENT' ? 'executable or required runtime dependency not found' : String(error?.message || error).slice(0, 400) };
     }
   };
   const [ytDlp, ffmpeg, ffprobe] = await Promise.all([check('yt-dlp'), check('ffmpeg'), check('ffprobe')]);
@@ -232,12 +273,18 @@ async function videoDownloaderToolsStatus() {
     ytDlp: ytDlp.available,
     ytDlpVersion: ytDlp.version,
     ytDlpSource: ytDlp.source,
+    ytDlpPath: ytDlp.path,
+    ytDlpReason: ytDlp.reason,
     ffmpeg: ffmpeg.available,
     ffmpegVersion: ffmpeg.version,
     ffmpegSource: ffmpeg.source,
+    ffmpegPath: ffmpeg.path,
+    ffmpegReason: ffmpeg.reason,
     ffprobe: ffprobe.available,
     ffprobeVersion: ffprobe.version,
-    bundled: ytDlp.source === 'bundled' && ffmpeg.source === 'bundled' && ffprobe.source === 'bundled',
+    ffprobePath: ffprobe.path,
+    ffprobeReason: ffprobe.reason,
+    bundled: ['bundled', 'bundled-cache'].includes(ytDlp.source) && ['bundled', 'bundled-cache'].includes(ffmpeg.source) && ['bundled', 'bundled-cache'].includes(ffprobe.source),
     packaged: app.isPackaged,
     platform: process.platform
   };

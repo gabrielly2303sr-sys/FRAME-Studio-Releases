@@ -45,9 +45,23 @@ async function fetchToFile(url, destination) {
 function toolWorks(file, args) {
   try { run(file, args); return true; } catch { return false; }
 }
+function isStandaloneLinuxYtDlp(file) {
+  // The `yt-dlp` release asset is a Python zipapp and still requires Python on the
+  // user's machine. Official Linux builds must use `yt-dlp_linux` (ELF/PyInstaller).
+  if (platform !== 'linux') return true;
+  try {
+    const fd = fs.openSync(file, 'r');
+    const magic = Buffer.alloc(4);
+    const read = fs.readSync(fd, magic, 0, 4, 0);
+    fs.closeSync(fd);
+    return read === 4 && magic[0] === 0x7f && magic[1] === 0x45 && magic[2] === 0x4c && magic[3] === 0x46;
+  } catch { return false; }
+}
 function allToolsReady() {
+  const ytPath = path.join(vendor, names.yt);
   return fs.existsSync(vendor)
-    && toolWorks(path.join(vendor, names.yt), ['--version'])
+    && isStandaloneLinuxYtDlp(ytPath)
+    && toolWorks(ytPath, ['--version'])
     && toolWorks(path.join(vendor, names.ffmpeg), ['-version'])
     && toolWorks(path.join(vendor, names.ffprobe), ['-version']);
 }
@@ -119,8 +133,9 @@ async function prepareLinux() {
   if (arch !== 'x64') throw new Error(`Bundled Linux tools are currently provided for x64, not ${arch}.`);
   await fsp.mkdir(vendor, { recursive: true });
   const ytPath = path.join(vendor, names.yt);
-  if (!toolWorks(ytPath, ['--version'])) {
-    await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp', ytPath);
+  if (!isStandaloneLinuxYtDlp(ytPath) || !toolWorks(ytPath, ['--version'])) {
+    await fsp.rm(ytPath, { force: true });
+    await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux', ytPath);
     await fsp.chmod(ytPath, 0o755);
   }
   if (!toolWorks(path.join(vendor, names.ffmpeg), ['-version']) || !toolWorks(path.join(vendor, names.ffprobe), ['-version'])) {

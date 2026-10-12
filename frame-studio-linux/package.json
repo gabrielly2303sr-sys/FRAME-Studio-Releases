@@ -1,8 +1,8 @@
 {
   "name": "frame-studio",
-  "version": "2.4.21",
+  "version": "2.4.22",
   "private": true,
-  "description": "Video editor with bundled FFmpeg and yt-dlp, text preview editing, and shortcut tooltips",
+  "description": "Video editor with reliable bundled media tools and improved packaged-runtime diagnostics",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",

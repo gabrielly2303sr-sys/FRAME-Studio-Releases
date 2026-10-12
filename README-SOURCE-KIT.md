@@ -1,14 +1,17 @@
-# FRAME Studio 2.4.21 — Automatic Bundled Tools
+# FRAME Studio 2.4.22 — Packaged Media Tools Fix
 
-This source kit includes `frame-studio-linux/scripts/prepare-bundled-tools.cjs`. It automatically downloads and verifies platform-matched yt-dlp, FFmpeg and ffprobe for Windows x64 or Linux x64.
+This corrective source kit addresses the recurring “official package is missing its bundled media tools” message reported from published AppImages.
 
-- `npm start`: attempts to prepare tools automatically; the editor still opens if a development download cannot complete.
-- `npm run build:win:installer`, `npm run build:win:portable`, `npm run build:linux`, and `npm run build:linux:appimage`: prepare the tool bundle before packaging and fail rather than create a package without required tools.
-- `install-linux.sh`: prepares/copies Linux tools into a source installation and retries automatically if they are missing.
-- Official GitHub Actions builds download the platform binaries and explicitly verify they exist under `resources/downloader` before publishing the package artifacts.
+### Why 2.4.21 was insufficient
+- The Linux URL used the `yt-dlp` Python zipapp, which can fail on machines without a compatible Python runtime even though the file exists.
+- CI verified the intermediate `linux-unpacked/resources/downloader` folder, but did not inspect and execute tools inside the final generated AppImage.
+- The runtime showed only a generic error, hiding whether the file was absent or failed to execute.
 
-The source ZIP intentionally contains only placeholders in `vendor/`. Binary files are not committed to Git; they are downloaded during startup/build and excluded by `frame-studio-linux/.gitignore`. The published installers/AppImage contain the actual executables.
+### 2.4.22 fixes
+- Linux CI and local preparation download the standalone `yt-dlp_linux` ELF asset.
+- Runtime lookup searches supported Electron resource layouts.
+- If a bundled Linux executable is present but loses its executable bit, FRAME copies that already-bundled file into its own user-data `runtime-tools` directory, sets the executable bit, and runs that copy. No system package manager is required.
+- The Downloader panel surfaces actual tool path/reason diagnostics.
+- GitHub Actions extracts the final AppImage, verifies the three tools exist and are executable inside it, and runs `--version` checks before uploading release artifacts.
 
-Packaged builds do not fall back to globally installed FFmpeg/yt-dlp. If a package misses them, it shows a packaging error directing the user to reinstall the official build instead of asking them to install tools separately.
-
-Before publishing `v2.4.21`, run `npm test`, push the source, then publish the matching GitHub Release. Confirm that Windows and Linux workflow jobs pass and inspect the output assets before distributing.
+The source ZIP has no native binaries; the release workflow fetches the platform artifacts and packs them into official installers/AppImages. Do not distribute a release until all build/publish jobs pass and the published AppImage has the expected version.
