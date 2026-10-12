@@ -1,15 +1,18 @@
-# FRAME Studio 2.4.27 — Seek & Audio Reliability Update
+# FRAME Studio 2.4.25 — Seekable Downloaded Media & Detached Extracted Audio
 
-This source kit bumps the existing 2.4.26 downloaded-media seek/audio fixes to release version 2.4.27 and fixes cross-platform regression tests that blocked CI when the package version changed or when Windows checked out line endings differently.
+- Fixes the frozen first frame when seeking downloaded videos/extracted audio (loopback HTTP media server) and detaches extracted audio from the source video clip. Tests: `tests/2.4.25-seek-http-and-detached-audio.test.js`. Automated tests pass; real Electron-window and final-installer testing still need to be done.
 
-## Included changes
-- `package.json`, the visible application title/badge, and the Linux installer desktop entry fallback are updated to 2.4.27.
-- The release-notes dialog and changelog include a 2.4.27 entry while preserving 2.4.26 as historical release notes.
-- The Media/Saved library test extracts the three relevant function blocks using explicit neighboring markers instead of assuming a closing brace appears on a separate line. This supports the checked-in minified/multiline markup and cross-platform line endings.
-- Previous downloaded-video seek, detached-audio, and bundled-media-tool verification code is retained.
+## Previous: 2.4.23 — Bundled Media Tools Verification Fix
 
-## Tests
-Run `npm install --no-audit --no-fund` and `npm test` from `frame-studio-linux/`. The final Windows installer and Linux packages must still be built and tested by GitHub Actions before distribution.
+The 2.4.22 AppImage found yt-dlp, FFmpeg and ffprobe inside its mounted resources but still reported "Bundled media tools could not start".
 
-## Publish
-Copy `.github/`, `frame-studio-linux/`, `README-SOURCE-KIT.md`, `RELEASE-NOTES-2.4.27.md`, and `RELEASE-VERIFICATION-2.4.27.md` to the repository. Commit and push to `main`, verify that `v2.4.27` does not already exist, and publish the GitHub Release using target `main`.
+### Root cause
+`videoDownloaderToolsStatus()` in `main.cjs` ran every tool with `--version`. FFmpeg and ffprobe use `-version`; with `--version` they print their banner and exit nonzero, so the check marked working binaries as failed. `media-export.cjs` already used `-version`, so the two checks disagreed.
+
+### 2.4.23 fixes
+- New shared helper `media-tools.cjs`: one definition of per-tool version arguments (yt-dlp `--version`, ffmpeg/ffprobe `-version`), packaged path resolution and failure classification.
+- `main.cjs`, `media-export.cjs` and `scripts/prepare-bundled-tools.cjs` use it.
+- `scripts/verify-bundled-tools.cjs` runs the real executables; the release workflow runs it on the unpacked app, the final AppImage, DEB, RPM and the installed Windows app.
+- Regression tests: `tests/2.4.23-media-tool-validation.test.js`.
+
+The source ZIP has no native binaries; the release workflow fetches platform artifacts and packs them. A packaged AppImage/Windows installer has NOT been built or executed in the environment that prepared this kit; do not publish until the release workflow passes and the final packages are checked with the checklist in RELEASE-VERIFICATION-2.4.23.md.

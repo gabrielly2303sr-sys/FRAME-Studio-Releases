@@ -3,6 +3,8 @@ name: Build and publish FRAME Studio
 on:
   release:
     types: [published]
+  # Allows rebuilding an existing release tag after fixing a failed CI build.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,7 +24,7 @@ jobs:
         working-directory: frame-studio-linux
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
         run: |
           $tagVersion = $env:RELEASE_TAG.TrimStart('v')
           $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
@@ -58,6 +60,7 @@ jobs:
         run: |
           node tests/2.4.23-media-tool-validation.test.js
           node tests/2.4.23-seek-and-library-delete.test.js
+          node tests/2.4.25-seek-http-and-detached-audio.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -154,6 +157,7 @@ jobs:
         run: |
           node tests/2.4.23-media-tool-validation.test.js
           node tests/2.4.23-seek-and-library-delete.test.js
+          node tests/2.4.25-seek-http-and-detached-audio.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -249,7 +253,7 @@ jobs:
       - name: Upload installers and updater metadata to this release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |

@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'package version must be semantic');
+assert.equal(pkg.version, '2.4.25', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',

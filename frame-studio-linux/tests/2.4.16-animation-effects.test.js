@@ -8,7 +8,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const gifDecoderSource = fs.readFileSync(path.join(root, 'gif-decoder.js'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
-assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'package version must be semantic');
+assert.equal(pkg.version, '2.4.25');
 assert.equal(pkg.devDependencies['electron-builder'], '25.1.8');
 assert.ok(pkg.dependencies['electron-updater']);
 assert.doesNotMatch(html.match(/<input[^>]+id="files"[^>]*>/)?.[0] || '', /\.glb|\.gltf|\.obj/);

@@ -1,19 +1,9 @@
-## 2.4.27 — Seek & Audio Reliability Update
-
-### [FIXED]
-- Updated version regression coverage to validate semantic-version consistency instead of hard-coding an older release number.
-- Made the Media/Saved library removal test independent of LF/CRLF line endings and more resilient to single-line or multi-line function formatting.
-- Preserved the 2.4.26 downloaded-media seeking and extracted-audio synchronization fixes.
-
-### [IMPROVED]
-- Release validation tests can now be run against the bumped package version on both Windows and Linux without changing historical feature assertions.
-
-## 2.4.26 — Downloaded Media Seek & Audio Fix
+## 2.4.25
 ### [FIXED]
 - Downloaded videos and extracted audio no longer jump back to the first frame (frozen, silent) when you seek or drag the playhead. Root cause: media loaded from a path was served through the custom `frame-media://` scheme, which Chromium does not treat as seekable (the 2.4.23 Range-header fix could not help, because the media stack never issued usable range seeks on that scheme). Path-based media now loads from a private loopback HTTP server (127.0.0.1, random port, per-session token, Host check, full 206/Content-Range support), the same transport Chromium seeks natively. Imported (blob) videos were not affected and are unchanged.
 - Extracting audio from a video now detaches it: the video clip is silenced in preview, excluded from the exported audio mix and its waveform is hidden, so the sound lives only on the extracted audio layer (no doubled audio). Ctrl+Z restores the original state; extracting twice from the same clip is blocked.
 ### [ADDED]
-- `media-server.cjs` and `tests/2.4.24-seek-http-and-detached-audio.test.js` (real HTTP Range, auth and detached-audio checks).
+- `media-server.cjs` and `tests/2.4.25-seek-http-and-detached-audio.test.js` (real HTTP Range, auth and detached-audio checks).
 
 ## 2.4.23
 ### [FIXED]
