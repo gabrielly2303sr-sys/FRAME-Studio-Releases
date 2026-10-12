@@ -2,13 +2,14 @@
 (function (root) {
   'use strict';
   const DEFAULTS = Object.freeze({
-    language: 'en-US', accent: '#b5f36c', backgroundPath: '', backgroundName: '', backgroundKind: 'image',
+    language: 'en-US', accent: '#b5f36c', accentMode: 'solid', accentSaturation: 82, accentLightness: 58, accentSpeed: 5, backgroundPath: '', backgroundName: '', backgroundKind: 'image',
     bgFit: 'cover', tint: '#101013', blur: 8, overlay: 48, brightness: 85, saturation: 100,
     bgX: 50, bgY: 50, uiOpacity: 92, glass: 8, aura: true, reduceMotion: false, compact: false
   });
   const TRANSLATIONS = {
     'FRAME Studio': 'FRAME Studio', '⌂ Início': '⌂ Home', 'Início': 'Home', '☰ Menu': '☰ Menu', '⚙ Aparência': '⚙ Appearance',
-    'Personalizar aparência e idioma': 'Customize appearance and language', 'Página inicial': 'Home page', 'Nome do projeto': 'Project name', 'Novo projeto': 'New project',
+    'Personalizar aparência e idioma': 'Customize appearance and language',
+    'Modo da cor de destaque': 'Accent color mode', 'Cor sólida': 'Solid color', 'RGB dinâmico': 'RGB cycle', 'RGB adaptativo ao fundo': 'Background-adaptive RGB', 'Saturação do acento': 'Accent saturation', 'Luminosidade do acento': 'Accent lightness', 'Velocidade do RGB': 'RGB speed', 'Página inicial': 'Home page', 'Nome do projeto': 'Project name', 'Novo projeto': 'New project',
     'Cancelar exportação': 'Cancel export', '↗ Exportar MP4': '↗ Export MP4', 'Exportar MP4': 'Export MP4',
     'LOCAL PROJECT': 'LOCAL PROJECT', 'MÍDIA': 'MEDIA', 'Importar arquivos': 'Import files',
     'Vídeo, imagem e áudio': 'Video, image, and audio', 'Clique para importar; depois arraste para a timeline': 'Click to import, then drag to the timeline',
@@ -309,6 +310,10 @@
     return {
       language: input.language === 'pt-BR' ? 'pt-BR' : 'en-US',
       accent: validHex(input.accent, DEFAULTS.accent),
+      accentMode: ['solid', 'rgb', 'background-rgb'].includes(input.accentMode) ? input.accentMode : DEFAULTS.accentMode,
+      accentSaturation: clamp(input.accentSaturation ?? DEFAULTS.accentSaturation, 15, 100),
+      accentLightness: clamp(input.accentLightness ?? DEFAULTS.accentLightness, 25, 82),
+      accentSpeed: clamp(input.accentSpeed ?? DEFAULTS.accentSpeed, 1, 20),
       backgroundPath: typeof input.backgroundPath === 'string' ? input.backgroundPath.slice(0, 4096) : '',
       backgroundName: typeof input.backgroundName === 'string' ? input.backgroundName.slice(0, 300) : '',
       backgroundKind: input.backgroundKind === 'video' ? 'video' : 'image',
@@ -579,7 +584,7 @@
   }
   function updateControlValues() {
     const values = {
-      customLanguage: settings.language, customAccent: settings.accent, customBgFit: settings.bgFit, customTint: settings.tint,
+      customLanguage: settings.language, customAccent: settings.accent, customAccentMode: settings.accentMode, customAccentSaturation: settings.accentSaturation, customAccentLightness: settings.accentLightness, customAccentSpeed: settings.accentSpeed, customBgFit: settings.bgFit, customTint: settings.tint,
       customBlur: settings.blur, customOverlay: settings.overlay, customBrightness: settings.brightness,
       customSaturation: settings.saturation, customBgX: settings.bgX, customBgY: settings.bgY,
       customUiOpacity: settings.uiOpacity, customGlass: settings.glass,
@@ -592,6 +597,9 @@
       else element.value = String(value);
     }
     $('#customAccentValue').textContent = settings.accent.toUpperCase();
+    $('#customAccentSaturationValue').textContent = `${settings.accentSaturation}%`;
+    $('#customAccentLightnessValue').textContent = `${settings.accentLightness}%`;
+    $('#customAccentSpeedValue').textContent = `${settings.accentSpeed.toFixed(1)}×`;
     $('#customTintValue').textContent = settings.tint.toUpperCase();
     $('#customBlurValue').textContent = `${settings.blur} px`;
     $('#customOverlayValue').textContent = `${settings.overlay}%`;
@@ -607,10 +615,68 @@
     if (preview) preview.classList.toggle('has-background', Boolean(settings.backgroundPath));
     $$('[data-accent-preset]').forEach(button => button.classList.toggle('active', button.dataset.accentPreset.toLowerCase() === settings.accent.toLowerCase()));
   }
+  let sampledBackgroundRGB = null;
+  let lastBackgroundSampleAt = 0;
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+    let h = 0, l = (max + min) / 2, sat = 0;
+    if (delta) {
+      sat = delta / (1 - Math.abs(2 * l - 1));
+      if (max === r) h = ((g - b) / delta) % 6;
+      else if (max === g) h = (b - r) / delta + 2;
+      else h = (r - g) / delta + 4;
+      h = (h * 60 + 360) % 360;
+    }
+    return { h, s: sat * 100, l: l * 100 };
+  }
+  function sampleBackgroundPalette(force = false) {
+    const now = Date.now();
+    if (!force && now - lastBackgroundSampleAt < 1200) return;
+    lastBackgroundSampleAt = now;
+    const source = settings.backgroundKind === 'video' ? $('#customBackgroundVideo') : $('#customBackgroundImage');
+    if (!source || source.hidden || !settings.backgroundPath) return;
+    const width = source.videoWidth || source.naturalWidth || 0, height = source.videoHeight || source.naturalHeight || 0;
+    if (!width || !height) return;
+    try {
+      const canvas = document.createElement('canvas'); canvas.width = 24; canvas.height = 24;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(source, 0, 0, 24, 24);
+      const pixels = ctx.getImageData(0, 0, 24, 24).data;
+      let r = 0, g = 0, b = 0, count = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i + 3] < 64) continue;
+        const max = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+        const min = Math.min(pixels[i], pixels[i + 1], pixels[i + 2]);
+        if (max - min < 12) continue;
+        r += pixels[i]; g += pixels[i + 1]; b += pixels[i + 2]; count++;
+      }
+      if (count) sampledBackgroundRGB = { r: r / count, g: g / count, b: b / count };
+      if (settings.accentMode === 'background-rgb') applyAppearance();
+    } catch {
+      // File/protocol codecs may disallow canvas sampling. The chosen accent is the safe fallback.
+    }
+  }
+  function generatedAccentGradient() {
+    const sat = clamp(settings.accentSaturation, 15, 100), light = clamp(settings.accentLightness, 25, 82);
+    let hue = rgbToHsl(...[1, 3, 5].map((offset) => parseInt(settings.accent.slice(offset, offset + 2), 16))).h;
+    if (settings.accentMode === 'background-rgb' && sampledBackgroundRGB) {
+      hue = rgbToHsl(sampledBackgroundRGB.r, sampledBackgroundRGB.g, sampledBackgroundRGB.b).h;
+    }
+    if (settings.accentMode === 'rgb') {
+      return `linear-gradient(110deg, hsl(0 ${sat}% ${light}%), hsl(60 ${sat}% ${light}%), hsl(120 ${sat}% ${light}%), hsl(180 ${sat}% ${light}%), hsl(240 ${sat}% ${light}%), hsl(300 ${sat}% ${light}%), hsl(360 ${sat}% ${light}%))`;
+    }
+    const hues = [hue - 34, hue, hue + 38, hue + 120].map(v => (v + 360) % 360);
+    return `linear-gradient(110deg, ${hues.map(h => `hsl(${h} ${sat}% ${light}%)`).join(', ')})`;
+  }
   function applyAppearance() {
     const style = document.documentElement.style;
     style.setProperty('--accent', settings.accent);
     style.setProperty('--accent-ink', accentTextColor(settings.accent));
+    const gradientMode = settings.accentMode === 'rgb' || settings.accentMode === 'background-rgb';
+    style.setProperty('--accent-fill', gradientMode ? generatedAccentGradient() : settings.accent);
+    style.setProperty('--accent-speed', `${Math.max(1, 21 - settings.accentSpeed)}s`);
+    document.documentElement.classList.toggle('accent-gradient-active', gradientMode && !settings.reduceMotion);
     style.setProperty('--ui-opacity', String(settings.uiOpacity / 100));
     style.setProperty('--ui-glass-blur', `${settings.glass}px`);
     style.setProperty('--bg-blur', `${settings.blur}px`);
@@ -727,6 +793,8 @@
     $('#customizeMenuBtn')?.addEventListener('click', () => { $('#menupop')?.classList.remove('open'); openCustomization(); });
     $('#customLanguage')?.addEventListener('change', event => { setValue('language', event.target.value); applyLanguage(); });
     $('#customAccent')?.addEventListener('input', event => setValue('accent', event.target.value));
+    $('#customAccentMode')?.addEventListener('change', event => { setValue('accentMode', event.target.value); sampleBackgroundPalette(true); });
+    bindRange('customAccentSaturation', 'accentSaturation'); bindRange('customAccentLightness', 'accentLightness'); bindRange('customAccentSpeed', 'accentSpeed');
     $('#customTint')?.addEventListener('input', event => setValue('tint', event.target.value));
     $('#customBgFit')?.addEventListener('change', event => setValue('bgFit', event.target.value));
     for (const button of $$('[data-accent-preset]')) button.addEventListener('click', () => setValue('accent', button.dataset.accentPreset));
@@ -741,6 +809,9 @@
     });
     $('#customCompact')?.addEventListener('change', event => setValue('compact', event.target.checked));
     $('#chooseBackgroundBtn')?.addEventListener('click', chooseBackground);
+    $('#customBackgroundImage')?.addEventListener('load', () => sampleBackgroundPalette(true));
+    $('#customBackgroundVideo')?.addEventListener('loadeddata', () => sampleBackgroundPalette(true));
+    $('#customBackgroundVideo')?.addEventListener('timeupdate', () => sampleBackgroundPalette(false));
     $('#customBackgroundImage')?.addEventListener('error', () => {
       if ($('#customBackgroundImage').hidden || !settings.backgroundPath) return;
       $('#customBackgroundImage').hidden = true;

@@ -1,3 +1,14 @@
+# FRAME Studio — Changelog
+
+## 2.4.26 — Appearance RGB, Camera Pivot, Multi-layer Workflow & Freeze Splits
+
+- Added solid, animated RGB, and background-adaptive accent modes with saturation, lightness, and speed controls. Adaptive color samples the selected image/video when the media is canvas-readable and safely falls back to the chosen accent otherwise.
+- Added an optional camera look-at pivot with numeric XYZ controls, “pivot at selected layer,” and orbit/navigation around the chosen point.
+- Added timeline controls to group/ungroup selected layers and enter/exit a group. Effects chosen from the effect library now apply to all selected layers/groups; resizing a selected transform handle scales all selected layers proportionally.
+- Added a Time Remap Freeze Frame split operation that creates before / one-second frozen frame / after segments on the same track, keeping project content in the existing format.
+- Added “End + join” to trim at the playhead and close the next gap on the same track by shifting the following clips.
+- Preserved existing project fields and defaulted new camera-pivot/appearance settings, so older projects remain readable.
+
 ## 2.4.25 — Downloaded media seeking and updater reliability
 
 ### [FIXED]
