@@ -1,4 +1,4 @@
-# FRAME Studio 2.4.26 — Downloaded Media Seek & Audio Fix
+# FRAME Studio 2.4.27 — Downloaded Media Seek & Audio Fix
 
 This release fixes seeking and audio synchronization for downloaded video media while preserving the bundled media-tool validation from 2.4.23. Earlier media-tool reliability work fixed the repeat “missing bundled media tools” issue in Linux AppImages. The Linux package now bundles the standalone `yt-dlp_linux` ELF executable rather than the Python zipapp, and the runtime can repair missing executable permissions by copying the already bundled binary into FRAME's app-owned cache. No `pacman`, Python package, or system-level FFmpeg/yt-dlp install is intended for the official package.
 

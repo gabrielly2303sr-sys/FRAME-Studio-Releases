@@ -1,6 +1,6 @@
 {
   "name": "frame-studio",
-  "version": "2.4.26",
+  "version": "2.4.27",
   "private": true,
   "description": "Video editor with verified bundled media tools and tool-specific health checks",
   "main": "main.cjs",

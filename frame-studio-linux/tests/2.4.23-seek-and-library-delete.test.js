@@ -69,10 +69,24 @@ async function readAll(response) { return Buffer.from(await response.arrayBuffer
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 
   // ---------- Renderer: removal from the Media bin with undo (functions executed from index.html) ----------
+  // Extract only the requested functions, using stable neighboring declarations rather than
+  // assuming a particular line ending or that a closing brace occupies its own line.
+  const functionBoundaries = {
+    removeAssetFromProject: ['function removeAssetFromProject(', 'function reviveStashedAssets('],
+    reviveStashedAssets: ['function reviveStashedAssets(', '// Deletes a file from the Saved'],
+    deleteSavedMediaFile: ['async function deleteSavedMediaFile(', 'let downloadedMediaFolders=']
+  };
   const grab = (name) => {
-    const match = html.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\r?\\n\\}\\r?\\n`));
-    assert.ok(match, `${name} located in index.html`);
-    return match[0];
+    const boundaries = functionBoundaries[name];
+    assert.ok(boundaries, `known function boundary for ${name}`);
+    const start = html.indexOf(boundaries[0]);
+    assert.ok(start >= 0, `${name} located in index.html`);
+    const next = html.indexOf(boundaries[1], start + boundaries[0].length);
+    assert.ok(next >= 0, `end boundary for ${name} located in index.html`);
+    const chunk = html.slice(start, next);
+    const lastBrace = chunk.lastIndexOf('}');
+    assert.ok(lastBrace >= 0, `${name} closing brace located in index.html`);
+    return chunk.slice(0, lastBrace + 1).trim();
   };
   const source = ['removeAssetFromProject', 'reviveStashedAssets', 'deleteSavedMediaFile'].map(grab).join('\n');
   const calls = [];
