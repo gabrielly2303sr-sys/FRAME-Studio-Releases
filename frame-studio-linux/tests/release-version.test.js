@@ -1,0 +1,12 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'package version must be semantic');
+assert.ok(html.includes(`<title>FRAME Studio ${pkg.version}</title>`), 'HTML document title matches package version');
+assert.ok(html.includes(`<span class="version-tag">${pkg.version}</span>`), 'visible version badge matches package version');
+assert.ok(html.includes(`FRAME Studio ${pkg.version} · Local Editing`), 'home footer matches package version');
+console.log(`FRAME Studio release version ${pkg.version}: UI labels consistent`);

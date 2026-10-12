@@ -70,7 +70,7 @@ async function readAll(response) { return Buffer.from(await response.arrayBuffer
 
   // ---------- Renderer: removal from the Media bin with undo (functions executed from index.html) ----------
   const grab = (name) => {
-    const match = html.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`));
+    const match = html.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\r?\\n\\}\\r?\\n`));
     assert.ok(match, `${name} located in index.html`);
     return match[0];
   };

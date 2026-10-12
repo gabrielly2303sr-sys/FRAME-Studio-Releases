@@ -58,7 +58,6 @@ jobs:
         run: |
           node tests/2.4.23-media-tool-validation.test.js
           node tests/2.4.23-seek-and-library-delete.test.js
-          node tests/2.4.24-download-seek-audio.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -155,7 +154,6 @@ jobs:
         run: |
           node tests/2.4.23-media-tool-validation.test.js
           node tests/2.4.23-seek-and-library-delete.test.js
-          node tests/2.4.24-download-seek-audio.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund

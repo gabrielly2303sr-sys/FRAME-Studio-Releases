@@ -5,9 +5,10 @@
 // responses; relying on net.fetch(file://) to forward Range headers is not reliable and left
 // downloaded videos (served through frame-media://) with a frozen frame while scrubbing.
 
+const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { ReadableStream } = require('node:stream/web');
+const { Readable } = require('node:stream');
 
 const MIME_TYPES = Object.freeze({
   '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska',
@@ -45,52 +46,6 @@ function parseByteRange(header, size) {
   return { start, end };
 }
 
-// A Web ReadableStream backed by a file handle. Using Web Streams directly is
-// important here: Electron's media decoder issues many byte-range requests while
-// seeking. The Node-to-Web stream adapter worked for sequential playback but was
-// unreliable for repeated media seeks in the packaged custom protocol.
-async function createFileBody(filePath, start, length) {
-  const handle = await fsp.open(filePath, 'r');
-  let position = start;
-  let remaining = length;
-  let closed = false;
-  const close = async () => {
-    if (closed) return;
-    closed = true;
-    await handle.close().catch(() => {});
-  };
-  return new ReadableStream({
-    async pull(controller) {
-      if (closed) return;
-      if (remaining <= 0) {
-        controller.close();
-        await close();
-        return;
-      }
-      const buffer = Buffer.allocUnsafe(Math.min(256 * 1024, remaining));
-      try {
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
-        if (!bytesRead) {
-          controller.close();
-          await close();
-          return;
-        }
-        position += bytesRead;
-        remaining -= bytesRead;
-        controller.enqueue(new Uint8Array(buffer.buffer, buffer.byteOffset, bytesRead));
-        if (remaining <= 0) {
-          controller.close();
-          await close();
-        }
-      } catch (error) {
-        await close();
-        controller.error(error);
-      }
-    },
-    async cancel() { await close(); }
-  }, { highWaterMark: 1 });
-}
-
 // Builds a fetch-style Response for a local file with full Range support.
 async function serveMediaFile(filePath, rangeHeader, method = 'GET') {
   let stat;
@@ -101,14 +56,10 @@ async function serveMediaFile(filePath, rangeHeader, method = 'GET') {
     'Content-Type': mimeTypeFor(filePath),
     'Accept-Ranges': 'bytes',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-    'Access-Control-Allow-Headers': 'Range, Content-Type',
-    'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Range, Content-Length',
     'Cross-Origin-Resource-Policy': 'cross-origin',
     'Cache-Control': 'no-cache',
     'Last-Modified': stat.mtime.toUTCString()
   };
-  if (method === 'OPTIONS') return new Response(null, { status: 204, headers: baseHeaders });
   const range = parseByteRange(rangeHeader, size);
   if (range === 'unsatisfiable') {
     return new Response(null, { status: 416, headers: { ...baseHeaders, 'Content-Range': `bytes */${size}` } });
@@ -120,11 +71,8 @@ async function serveMediaFile(filePath, rangeHeader, method = 'GET') {
   if (range) headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
   const status = range ? 206 : 200;
   if (method === 'HEAD' || length === 0) return new Response(null, { status, headers });
-  try {
-    return new Response(await createFileBody(filePath, start, length), { status, headers });
-  } catch (error) {
-    return new Response(`Could not stream media: ${error.message || error}`, { status: 500, headers: baseHeaders });
-  }
+  const stream = fs.createReadStream(filePath, { start, end });
+  return new Response(Readable.toWeb(stream), { status, headers });
 }
 
 module.exports = { MIME_TYPES, mimeTypeFor, parseByteRange, serveMediaFile };

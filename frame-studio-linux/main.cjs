@@ -8,6 +8,8 @@ const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
 const { serveMediaFile } = require('./media-protocol.cjs');
+const { createMediaServer } = require('./media-server.cjs');
+const mediaServer = createMediaServer();
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -563,7 +565,7 @@ function createWindow() {
   return win;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   configureBundledMediaTools();
   // Ask for microphone access only after the user starts an explicit recording.
   // This is scoped to the trusted local renderer and grants audio capture only.
@@ -604,23 +606,15 @@ app.whenReady().then(() => {
   });
   protocol.handle('frame-media', async (request) => {
     try {
-      if (request.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-          'Access-Control-Allow-Headers': 'Range, Content-Type',
-          'Access-Control-Max-Age': '600'
-        } });
-      }
       const target = new URL(request.url).searchParams.get('path');
       if (!target || !path.isAbsolute(target)) return new Response('Invalid media path', { status: 400 });
-      if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { 'Allow': 'GET, HEAD, OPTIONS' } });
       return await serveMediaFile(target, request.headers.get('range'), request.method);
     } catch (error) {
       return new Response(`Could not open media: ${error.message}`, { status: 404 });
     }
   });
 
+  await mediaServer.start();
   createWindow();
   setupAutomaticUpdates();
   app.on('activate', () => {
@@ -628,8 +622,16 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('will-quit', () => { mediaServer.stop().catch(() => {}); });
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Synchronous so preload can build seekable http://127.0.0.1 media URLs before the page runs.
+ipcMain.on('frame:media-server-info', event => {
+  try { assertTrustedSender(event); event.returnValue = { origin: mediaServer.origin, token: mediaServer.token }; }
+  catch { event.returnValue = null; }
 });
 
 ipcMain.handle('frame:check-export-tools', async event => {
