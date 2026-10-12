@@ -1,3 +1,20 @@
+## 2.4.25 — Downloaded media seeking and updater reliability
+
+### [FIXED]
+- The `frame-media://` protocol now implements byte-range requests directly from the media file, returning valid `206 Partial Content`, `Content-Range`, `Accept-Ranges`, and exact `Content-Length` headers. This allows downloaded MP4/WebM/MOV videos and MP3/audio assets to seek without restarting from byte zero.
+- Unsatisfiable byte ranges return `416 Range Not Satisfiable`; HEAD requests return the same range metadata without opening a file stream. Common audio/video/image MIME types are supplied explicitly.
+- The media protocol no longer relies on forwarding a `Range` header through `net.fetch(file://...)`, which did not guarantee standards-compliant partial-content responses.
+
+### [IMPROVED]
+- Automatic update checks retry with exponential backoff when the GitHub release metadata or installer assets are not ready yet. A release published before CI finishes uploading `latest.yml` no longer makes the app wait up to six hours to retry.
+- The release workflow now runs the complete regression suite on Windows and Linux before building release artifacts.
+- The updater continues to use GitHub Releases and the existing Windows NSIS / Linux AppImage update channels; older project files and editing workflows are preserved.
+
+### [TESTING]
+- Added byte-range regression tests for full file reads, closed/open-ended ranges, suffix ranges, invalid ranges, HEAD requests, MIME type handling, and downloaded-video / MP3 payload bytes.
+- Kept the existing timeline seek, media downloader, export, and editor regression tests in the package test command.
+- A real packaged app still requires manual verification on Windows and Linux with downloaded MP4 and MP3 files; automated tests do not emulate the full Chromium media decoder.
+
 
 ## 2.4.24 — Critical video scrubbing fix
 

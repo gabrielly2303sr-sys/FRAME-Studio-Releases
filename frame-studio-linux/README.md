@@ -1,16 +1,15 @@
-# FRAME Studio 2.4.24 — Critical Video Scrubbing Fix
+# FRAME Studio 2.4.25 — Downloaded Media Seek Fix
 
-This release addresses a critical preview bug where video frames could remain frozen or lag behind the playhead while scrubbing. Grabbing the playhead now pauses active playback, seek requests are coalesced to keep up with the newest timeline time, interactive scrubbing uses exact `currentTime` requests instead of coarse `fastSeek()` keyframe jumps, and releasing the pointer requests the final frame precisely. Decoded-frame updates invalidate compositor textures for clips using that video asset.
+This is an incremental fix to the existing FRAME Studio application. Existing project files, editing features, and prior-release behavior are kept.
 
-## Validation
-Run `npm install --no-audit --no-fund` and `npm test` from this directory. The new `tests/2.4.24-playhead-video-scrub.test.js` tests the shared `video-preview-seek.js` helper used by the renderer and checks the integration for playback cancellation, seek finalization, active clip target reconciliation, and cache invalidation.
+Downloaded library assets are served using the `frame-media://` protocol. This release adds standards-compliant byte-range responses directly from disk (`206 Partial Content`, `Content-Range`, `Accept-Ranges`, and exact lengths), allowing video and MP3 playback to seek without snapping back to the first frame or losing audio.
 
-For final manual validation, use a long-GOP H.264/H.265 video and drag the playhead slowly and rapidly, scrub backward and across clip boundaries, scrub while playback is running, release while a seek is still pending, then press Play again. Repeat with split clips and Time Remapping. This source kit has not been run in a real Electron GUI in this environment.
+Automatic update checks retry with increasing delays after a temporary release-feed or asset-upload error. The existing GitHub Releases configuration and auto-updatable formats are preserved: Windows NSIS and Linux AppImage. Windows portable EXEs, Linux DEB/RPM installs, and unpackaged source runs do not support this same self-replacement mechanism.
 
-## Previous release: 2.4.23 — Bundled Media Tools Verification Fix
+## Tests
+Run `npm install --no-audit --no-fund` and `npm test` from this directory. The byte-range tests cover full reads, partial reads, open-ended and suffix ranges, invalid ranges, HEAD requests, and the media protocol integration. The existing editor, timeline, export, downloader, and updater regression tests remain included.
 
-The previous release fixed the repeat “missing bundled media tools” issue in Linux AppImages. The Linux package bundles the standalone `yt-dlp_linux` ELF executable rather than the Python zipapp, and the runtime can repair missing executable permissions by copying the already bundled binary into FRAME's app-owned cache. No `pacman`, Python package, or system-level FFmpeg/yt-dlp install is intended for the official package.
+The full app still needs a manual smoke test in a packaged Electron build with downloaded MP4 and MP3 media. Automated tests do not replace testing the actual Chromium video/audio decoder.
 
-The release workflow validates both `linux-unpacked/resources/downloader` and the final extracted AppImage, then runs the correct version checks for yt-dlp, FFmpeg, and ffprobe before publishing. It also verifies that `latest-linux.yml` (and the Windows `latest.yml`) is generated with the installer assets.
-
-Use the official installer/AppImage. Source development runs prepare tools under `vendor/<platform>`; those downloaded files are not committed to this source package. See `THIRD_PARTY_NOTICES.md` for bundled tool licensing and attribution.
+## Release
+The package version is `2.4.25`, which must match the GitHub release tag (`v2.4.25`). The release workflow verifies the version match and publishes `latest.yml` and `latest-linux.yml` with each release's updater-supported assets.

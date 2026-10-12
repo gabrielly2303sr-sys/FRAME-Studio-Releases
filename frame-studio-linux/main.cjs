@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, session } = require('electron');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const path = require('node:path');
@@ -7,6 +7,7 @@ const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
+const { createMediaFileResponse } = require('./media-range.cjs');
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -62,6 +63,18 @@ function setupAutomaticUpdates() {
 
   let promptOpen = false;
   let downloadRequested = false;
+  let checkInProgress = false;
+  let retryTimer = null;
+  let retryDelayMs = 45_000;
+  const clearRetry = () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; };
+  const scheduleRetry = () => {
+    if (downloadRequested) return;
+    clearRetry();
+    const delay = retryDelayMs;
+    retryDelayMs = Math.min(retryDelayMs * 2, 15 * 60 * 1000);
+    retryTimer = setTimeout(() => { retryTimer = null; check(); }, delay);
+    retryTimer.unref?.();
+  };
   const getWindow = () => BrowserWindow.getAllWindows().find(win => !win.isDestroyed()) || null;
   const showMessage = async options => {
     const win = getWindow();
@@ -73,9 +86,15 @@ function setupAutomaticUpdates() {
   };
 
   autoUpdater.on('checking-for-update', () => console.info('Checking for FRAME Studio updates…'));
-  autoUpdater.on('update-not-available', info => console.info(`FRAME Studio is up to date (${info?.version || app.getVersion()}).`));
+  autoUpdater.on('update-not-available', info => {
+    clearRetry();
+    retryDelayMs = 45_000;
+    console.info(`FRAME Studio is up to date (${info?.version || app.getVersion()}).`);
+  });
 
   autoUpdater.on('update-available', async info => {
+    clearRetry();
+    retryDelayMs = 45_000;
     if (promptOpen) return;
     promptOpen = true;
     try {
@@ -97,6 +116,7 @@ function setupAutomaticUpdates() {
           downloadRequested = false;
           notifyRenderer({ stage: 'error' });
           console.error('FRAME Studio update download failed:', error);
+          scheduleRetry();
           await showMessage({
             type: 'error',
             title: 'FRAME Studio — Update failed',
@@ -140,9 +160,16 @@ function setupAutomaticUpdates() {
 
   autoUpdater.on('error', error => {
     console.warn('FRAME Studio update check/update error:', error?.message || error);
-    if (!downloadRequested) return; // Keep offline startup quiet unless the user chose to update.
+    if (!downloadRequested) {
+      // New releases are published before CI attaches latest.yml and installers.
+      // Retry with backoff rather than making an app opened during that window
+      // wait six hours before it can discover the release.
+      scheduleRetry();
+      return;
+    }
     downloadRequested = false;
     notifyRenderer({ stage: 'error' });
+    scheduleRetry();
     showMessage({
       type: 'error',
       title: 'FRAME Studio — Update failed',
@@ -154,8 +181,14 @@ function setupAutomaticUpdates() {
   });
 
   const check = () => {
-    if (downloadRequested) return;
-    autoUpdater.checkForUpdates().catch(error => console.warn('FRAME Studio update check failed:', error?.message || error));
+    if (downloadRequested || checkInProgress) return;
+    checkInProgress = true;
+    Promise.resolve(autoUpdater.checkForUpdates())
+      .catch(error => {
+        console.warn('FRAME Studio update check failed:', error?.message || error);
+        scheduleRetry();
+      })
+      .finally(() => { checkInProgress = false; });
   };
   const startupCheck = setTimeout(check, 9000);
   startupCheck.unref?.();
@@ -605,14 +638,11 @@ app.whenReady().then(() => {
     try {
       const target = new URL(request.url).searchParams.get('path');
       if (!target || !path.isAbsolute(target)) return new Response('Invalid media path', { status: 400 });
-      const range = request.headers.get('range');
-      const response = await net.fetch(pathToFileURL(target).toString(), range ? { headers: { Range: range } } : {});
-      const headers = new Headers(response.headers);
-      headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-      headers.set('Cache-Control', 'no-cache');
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+      // Do not proxy file:// through net.fetch(): it may not honor Range requests
+      // as HTTP 206 responses. Video and audio decoders need byte ranges to seek.
+      return createMediaFileResponse(target, request);
     } catch (error) {
+      console.warn('FRAME media protocol request failed:', error?.message || error);
       return new Response(`Could not open media: ${error.message}`, { status: 404 });
     }
   });
