@@ -148,11 +148,11 @@ async function main() {
 
     await assert.rejects(
       transcodeWebmToMp4({ inputPath: withAudio, outputPath: path.join(dir, 'missing-ffmpeg.mp4'), expectedDuration: 1.2, ffmpegPath: path.join(dir, 'ffmpeg-inexistente') }),
-      /FFmpeg was not found.*sudo pacman -S --needed ffmpeg/s
+      /FFmpeg is not available in this development run.*prepared automatically/s
     );
     const missingTools = await checkMediaTools({ ffmpegPath: path.join(dir, 'ffmpeg-inexistente') });
     assert.equal(missingTools.available, false, 'pré-verificação deve bloquear exportação se FFmpeg estiver ausente');
-    assert.match(missingTools.message, /FFmpeg.*not found.*sudo pacman -S --needed ffmpeg/s);
+    assert.match(missingTools.message, /FFmpeg.*not available in this development run.*bundle these tools automatically/s);
 
     const corrupted = path.join(dir, 'not-a-video.webm');
     await fs.writeFile(corrupted, 'não é um vídeo');

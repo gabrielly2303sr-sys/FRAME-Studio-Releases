@@ -171,8 +171,11 @@ function bundledToolPath(tool) {
   const filename = toolFilename(tool);
   const platformFolder = process.platform === 'win32' ? 'win' : process.platform === 'linux' ? 'linux' : process.platform;
   const candidates = [];
-  if (app.isPackaged && process.resourcesPath) candidates.push(path.join(process.resourcesPath, 'downloader', filename));
-  candidates.push(path.join(__dirname, 'vendor', platformFolder, filename));
+  if (app.isPackaged && process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'downloader', filename));
+  } else {
+    candidates.push(path.join(__dirname, 'vendor', platformFolder, filename));
+  }
   for (const candidate of candidates) {
     try {
       if (fsSync.statSync(candidate).isFile()) return candidate;
@@ -182,10 +185,29 @@ function bundledToolPath(tool) {
 }
 
 function downloaderToolCommand(tool) {
-  return bundledToolPath(tool) || toolFilename(tool);
+  const bundled = bundledToolPath(tool);
+  // A packaged app must never silently fall back to a user's PATH. The release build
+  // is required to carry these binaries in resources/downloader.
+  if (bundled) return bundled;
+  return app.isPackaged ? null : toolFilename(tool);
+}
+
+function mediaToolCommand(tool) {
+  const envName = tool === 'ffprobe' ? 'FRAME_FFPROBE_PATH' : 'FRAME_FFMPEG_PATH';
+  if (process.env[envName]) return process.env[envName];
+  const bundled = bundledToolPath(tool);
+  if (bundled) return bundled;
+  return app.isPackaged ? null : toolFilename(tool);
+}
+
+function missingBundledToolMessage(tool) {
+  const label = tool === 'yt-dlp' ? 'the video downloader' : tool === 'ffprobe' ? 'ffprobe' : 'FFmpeg';
+  if (app.isPackaged) return `This FRAME Studio package is missing bundled ${label}. Re-download the official installer/AppImage; users should not need to install separate media tools.`;
+  return `Bundled ${label} was not prepared in this development checkout. Run \`npm start\` or \`npm run prepare:tools\` while connected to the internet; no separate system installation is required for this development setup.`;
 }
 
 function configureBundledMediaTools() {
+  process.env.FRAME_PACKAGED_APP = app.isPackaged ? '1' : '0';
   const ffmpeg = bundledToolPath('ffmpeg');
   const ffprobe = bundledToolPath('ffprobe');
   if (ffmpeg && !process.env.FRAME_FFMPEG_PATH) process.env.FRAME_FFMPEG_PATH = ffmpeg;
@@ -195,7 +217,8 @@ function configureBundledMediaTools() {
 async function videoDownloaderToolsStatus() {
   const check = async (tool) => {
     const bundledPath = bundledToolPath(tool);
-    const command = bundledPath || toolFilename(tool);
+    const command = bundledPath || (app.isPackaged ? null : toolFilename(tool));
+    if (!command) return { available: false, version: '', source: 'missing', reason: 'not-bundled-in-package' };
     try {
       const result = await execFileAsync(command, ['--version'], { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
       const output = `${result.stdout || ''}\n${result.stderr || ''}`;
@@ -204,7 +227,7 @@ async function videoDownloaderToolsStatus() {
       return { available: false, version: '', source: 'missing', reason: error?.code === 'ENOENT' ? 'not-found' : String(error?.message || error).slice(0, 240) };
     }
   };
-  const [ytDlp, ffmpeg] = await Promise.all([check('yt-dlp'), check('ffmpeg')]);
+  const [ytDlp, ffmpeg, ffprobe] = await Promise.all([check('yt-dlp'), check('ffmpeg'), check('ffprobe')]);
   return {
     ytDlp: ytDlp.available,
     ytDlpVersion: ytDlp.version,
@@ -212,8 +235,10 @@ async function videoDownloaderToolsStatus() {
     ffmpeg: ffmpeg.available,
     ffmpegVersion: ffmpeg.version,
     ffmpegSource: ffmpeg.source,
-    ffprobe: (await check('ffprobe')).available,
-    bundled: ytDlp.source === 'bundled' && ffmpeg.source === 'bundled',
+    ffprobe: ffprobe.available,
+    ffprobeVersion: ffprobe.version,
+    bundled: ytDlp.source === 'bundled' && ffmpeg.source === 'bundled' && ffprobe.source === 'bundled',
+    packaged: app.isPackaged,
     platform: process.platform
   };
 }
@@ -353,8 +378,8 @@ async function runYoutubeDownload(event, payload) {
   if (!allowedFps.has(maxFps)) throw new Error('Choose a supported maximum FPS.');
 
   const tools = await videoDownloaderToolsStatus();
-  if (!tools.ytDlp) throw new Error('Bundled yt-dlp is unavailable and no system yt-dlp executable was found. Reinstall the official FRAME Studio package or install yt-dlp.');
-  if (!tools.ffmpeg) throw new Error('Bundled FFmpeg is unavailable and no system FFmpeg executable was found. Reinstall the official FRAME Studio package or install FFmpeg.');
+  if (!tools.ytDlp) throw new Error(missingBundledToolMessage('yt-dlp'));
+  if (!tools.ffmpeg) throw new Error(missingBundledToolMessage('ffmpeg'));
 
   const { root, target: targetDir, relative: targetRelative } = resolveLibraryPath(payload?.folder || '');
   await fs.mkdir(targetDir, { recursive: true });
@@ -413,7 +438,7 @@ async function runYoutubeDownload(event, payload) {
       };
       child.stdout.on('data', processText);
       child.stderr.on('data', processText);
-      child.once('error', error => finish(new Error(error?.code === 'ENOENT' ? 'Bundled yt-dlp could not start. Reinstall the official package or install yt-dlp.' : `Could not start yt-dlp: ${error?.message || error}`)));
+      child.once('error', error => finish(new Error(error?.code === 'ENOENT' ? missingBundledToolMessage('yt-dlp') : `Could not start yt-dlp: ${error?.message || error}`)));
       child.once('close', code => {
         if (lineBuffer.trim()) processText('\n', true);
         if (child.__frameCancelled) {
@@ -808,7 +833,8 @@ ipcMain.handle('frame:generate-waveform', async (event, payload) => {
   const left = [];
   let bucketPeak = 0, bucketSamples = 0, carryByte = null, sampleCount = 0;
   await new Promise((resolve, reject) => {
-    const binary = process.env.FRAME_FFMPEG_PATH || 'ffmpeg';
+    const binary = mediaToolCommand('ffmpeg');
+    if (!binary) { finish(reject, new Error(missingBundledToolMessage('ffmpeg'))); return; }
     let child, stderr = '', settled = false;
     const finish = (fn, value) => { if (settled) return; settled = true; fn(value); };
     try { child = spawn(binary, ['-v', 'error', '-i', target, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(sampleRate), '-f', 's16le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); }
@@ -871,7 +897,9 @@ ipcMain.handle('frame:extract-audio', async (event, payload) => {
   const copyExt = preserveExt || '.m4a';
   let outputPath = await uniqueMediaPath(dir, base, copyExt);
   const runFfmpeg = args => new Promise((resolve, reject) => {
-    const child = spawn(process.env.FRAME_FFMPEG_PATH || 'ffmpeg', args, { stdio: ['ignore','ignore','pipe'], windowsHide: true });
+    const binary = mediaToolCommand('ffmpeg');
+    if (!binary) { reject(new Error(missingBundledToolMessage('ffmpeg'))); return; }
+    const child = spawn(binary, args, { stdio: ['ignore','ignore','pipe'], windowsHide: true });
     let stderr = '';
     child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-10000); });
     child.once('error', reject);

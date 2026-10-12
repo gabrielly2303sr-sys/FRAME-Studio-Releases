@@ -7,7 +7,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const media = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.20');
+assert.equal(pkg.version, '2.4.21');
 assert.match(html, /function schedulePreviewRefinement\(/);
 assert.match(html, /function saveScrubFrameSnapshot\(/);
 assert.match(html, /FAST PREVIEW/);

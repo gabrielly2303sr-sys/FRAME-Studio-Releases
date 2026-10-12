@@ -1,6 +1,12 @@
-# FRAME Studio 2.4.20 — Bundled Tools & Text Editing
+# FRAME Studio 2.4.21 — Bundled Tools & Automatic Setup
 
 This directory contains the Electron source code, not a prebuilt installer.
+
+## 2.4.21
+
+- Source startup/build scripts prepare yt-dlp, FFmpeg and ffprobe automatically when they are missing.
+- Official packages fail clearly if bundled resources are absent rather than asking users to install separate tools.
+- Linux source install copies the prepared tool binaries and their notices.
 
 ## 2.4.20
 

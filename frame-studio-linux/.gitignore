@@ -1,0 +1,6 @@
+# Native media tools are downloaded automatically by the build/bootstrap script.
+# They are included in release artifacts via electron-builder extraResources, not committed.
+/vendor/linux/*
+!/vendor/linux/.gitkeep
+/vendor/win/*
+!/vendor/win/.gitkeep

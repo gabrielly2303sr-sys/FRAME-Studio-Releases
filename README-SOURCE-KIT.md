@@ -1,19 +1,14 @@
-# FRAME Studio 2.4.20 — Source Kit
+# FRAME Studio 2.4.21 — Automatic Bundled Tools
 
-Complete source tree for the existing Electron application; this is not a prebuilt installer.
+This source kit includes `frame-studio-linux/scripts/prepare-bundled-tools.cjs`. It automatically downloads and verifies platform-matched yt-dlp, FFmpeg and ffprobe for Windows x64 or Linux x64.
 
-## Included changes
-- Bundle-aware FFmpeg, ffprobe, and yt-dlp resolution. Official builds download platform-matched binaries into `vendor/` before packaging and copy them into `resources/downloader`, outside `app.asar`.
-- More reliable double-click text editing in the preview.
-- Compact Undo/Redo buttons in the timeline toolbar.
-- Shortcut tooltips on hover, including customized shortcuts.
-- GitHub Actions build checks verify that the downloader and FFmpeg tools are actually present in the packaged app resources.
+- `npm start`: attempts to prepare tools automatically; the editor still opens if a development download cannot complete.
+- `npm run build:win:installer`, `npm run build:win:portable`, `npm run build:linux`, and `npm run build:linux:appimage`: prepare the tool bundle before packaging and fail rather than create a package without required tools.
+- `install-linux.sh`: prepares/copies Linux tools into a source installation and retries automatically if they are missing.
+- Official GitHub Actions builds download the platform binaries and explicitly verify they exist under `resources/downloader` before publishing the package artifacts.
 
-## Publish
-1. Copy `.github/` and `frame-studio-linux/` into the repository root.
-2. Run `npm install --no-audit --no-fund` and `npm test` inside `frame-studio-linux`.
-3. Push the code to `main`.
-4. Publish tag `v2.4.20` only after confirming it does not already exist and that `frame-studio-linux/package.json` is version `2.4.20`.
-5. Wait for Windows, Linux, and Release-asset jobs to succeed before distributing the release.
+The source ZIP intentionally contains only placeholders in `vendor/`. Binary files are not committed to Git; they are downloaded during startup/build and excluded by `frame-studio-linux/.gitignore`. The published installers/AppImage contain the actual executables.
 
-The third-party tools are fetched by CI at build time rather than included in this source archive. See `frame-studio-linux/THIRD_PARTY_NOTICES.md` for upstreams and licensing notes.
+Packaged builds do not fall back to globally installed FFmpeg/yt-dlp. If a package misses them, it shows a packaging error directing the user to reinstall the official build instead of asking them to install tools separately.
+
+Before publishing `v2.4.21`, run `npm test`, push the source, then publish the matching GitHub Release. Confirm that Windows and Linux workflow jobs pass and inspect the output assets before distributing.

@@ -9,7 +9,7 @@ const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'release.yml'), 'utf8');
 
-assert.equal(pkg.version, '2.4.20');
+assert.equal(pkg.version, '2.4.21');
 assert.match(pkg.build.win.extraResources.map(x => `${x.from}=>${x.to}`).join('\n'), /vendor\/win=>downloader/);
 assert.match(pkg.build.linux.extraResources.map(x => `${x.from}=>${x.to}`).join('\n'), /vendor\/linux=>downloader/);
 assert.match(main, /function downloadedMediaRoot\(\)\s*\{\s*return path\.join\(app\.getPath\('userData'\), 'Media Library', 'Downloaded Media'\)/);
@@ -45,4 +45,4 @@ assert.match(workflow, /vendor\\win/);
 assert.match(workflow, /vendor\/linux/);
 assert.match(workflow, /ffmpeg-release-essentials\.zip/);
 assert.match(workflow, /ffmpeg-release-amd64-static\.tar\.xz/);
-console.log('FRAME Studio 2.4.20 downloaded-media library and bundled tools checks: OK');
+console.log('FRAME Studio 2.4.21 downloaded-media library and bundled tools checks: OK');

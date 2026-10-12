@@ -12,17 +12,32 @@ class ExportCanceledError extends Error {
   }
 }
 
+function resolveToolPath(kind, override) {
+  if (override) return override;
+  const envName = kind === 'ffprobe' ? 'FRAME_FFPROBE_PATH' : 'FRAME_FFMPEG_PATH';
+  if (process.env[envName]) return process.env[envName];
+  // Official packaged releases must use their included tool. Never prompt end users
+  // to install a system package or accidentally hide a packaging failure via PATH.
+  if (process.env.FRAME_PACKAGED_APP === '1') return null;
+  return kind;
+}
+
 function executableError(kind, error) {
+  const label = kind === 'ffmpeg' ? 'FFmpeg' : 'ffprobe';
   if (error?.code === 'ENOENT') {
-    return new Error(`${kind === 'ffmpeg' ? 'FFmpeg' : 'ffprobe'} was not found. On CachyOS/Arch, install it with: sudo pacman -S --needed ffmpeg`);
+    if (process.env.FRAME_PACKAGED_APP === '1') {
+      return new Error(`This FRAME Studio package is missing its bundled ${label}. Re-download the official installer/AppImage; users should not need to install separate media tools.`);
+    }
+    return new Error(`${label} is not available in this development run. Bundled tools are prepared automatically by the source start/build scripts.`);
   }
-  return new Error(`Could not start ${kind}: ${error?.message || String(error)}`);
+  return new Error(`Could not start ${label}: ${error?.message || String(error)}`);
 }
 
 function runProcess(binary, args, options = {}) {
   const { signal, onProgress, onProcess, kind = binary } = options;
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new ExportCanceledError());
+    if (!binary) return reject(executableError(options.kind || 'ffmpeg', { code: 'ENOENT' }));
     let child;
     let stdout = '';
     let stderr = '';
@@ -81,7 +96,7 @@ function runProcess(binary, args, options = {}) {
 }
 
 async function probeMedia(filePath, options = {}) {
-  const ffprobePath = options.ffprobePath || process.env.FRAME_FFPROBE_PATH || 'ffprobe';
+  const ffprobePath = resolveToolPath('ffprobe', options.ffprobePath);
   const { stdout } = await runProcess(ffprobePath, [
     '-v', 'error', '-show_entries',
     'format=duration:stream=codec_type,codec_name,width,height,pix_fmt,sample_rate,channels,duration,avg_frame_rate,r_frame_rate,nb_frames',
@@ -178,8 +193,8 @@ function validateProbe(probe, expectedDuration, label, options = {}) {
 }
 
 async function checkMediaTools(options = {}) {
-  const ffmpegPath = options.ffmpegPath || process.env.FRAME_FFMPEG_PATH || 'ffmpeg';
-  const ffprobePath = options.ffprobePath || process.env.FRAME_FFPROBE_PATH || 'ffprobe';
+  const ffmpegPath = resolveToolPath('ffmpeg', options.ffmpegPath);
+  const ffprobePath = resolveToolPath('ffprobe', options.ffprobePath);
   const check = async (binary, kind) => {
     try {
       const result = await runProcess(binary, ['-version'], { kind });
@@ -194,7 +209,9 @@ async function checkMediaTools(options = {}) {
   if (!ffmpeg.available) missing.push('FFmpeg');
   if (!ffprobe.available) missing.push('ffprobe');
   const message = missing.length
-    ? `${missing.join(' and ')} not found. On CachyOS/Arch, install with: sudo pacman -S --needed ffmpeg`
+    ? (process.env.FRAME_PACKAGED_APP === '1'
+      ? `This FRAME Studio package is missing bundled ${missing.join(' and ')}. Re-download the official installer/AppImage; separate tool installation should not be needed.`
+      : `${missing.join(' and ')} are not available in this development run. The official application packages bundle these tools automatically.`)
     : '';
   return { available: ffmpeg.available && ffprobe.available, ffmpeg, ffprobe, message };
 }
@@ -209,8 +226,8 @@ async function transcodeWebmToMp4(options) {
     signal,
     onProgress,
     onProcess,
-    ffmpegPath = process.env.FRAME_FFMPEG_PATH || 'ffmpeg',
-    ffprobePath = process.env.FRAME_FFPROBE_PATH || 'ffprobe'
+    ffmpegPath = resolveToolPath('ffmpeg'),
+    ffprobePath = resolveToolPath('ffprobe')
   } = options || {};
   if (!inputPath || !outputPath) throw new Error('Input and output paths are required.');
   if (signal?.aborted) throw new ExportCanceledError();
@@ -401,8 +418,8 @@ async function renderFrameSequenceToMp4(options = {}) {
     signal,
     onProgress,
     onProcess,
-    ffmpegPath = process.env.FRAME_FFMPEG_PATH || 'ffmpeg',
-    ffprobePath = process.env.FRAME_FFPROBE_PATH || 'ffprobe'
+    ffmpegPath = resolveToolPath('ffmpeg'),
+    ffprobePath = resolveToolPath('ffprobe')
   } = options;
   if (!framePattern || !outputPath) throw new Error('A frame sequence and MP4 output path are required.');
   const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));

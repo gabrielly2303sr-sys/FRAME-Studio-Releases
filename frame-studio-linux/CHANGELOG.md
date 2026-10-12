@@ -1,3 +1,16 @@
+## 2.4.21
+
+### [FIXED]
+- Packaged builds no longer silently fall back to globally installed FFmpeg/yt-dlp when bundled tools are missing; the UI now explains that the official package should include them.
+- Local Linux source installs automatically prepare and copy the media tools instead of asking end users to install FFmpeg/yt-dlp manually.
+
+### [ADDED]
+- Automatic platform-specific yt-dlp, FFmpeg and ffprobe preparation before source startup and local builds.
+- Validation of bundled tool execution and clearer packaged-build diagnostics.
+
+### [COMPATIBILITY]
+- Official NSIS/AppImage/DEB/RPM build workflows continue to package platform-matched binaries under `resources/downloader`.
+
 ## 2.4.20
 
 ### [FIXED]
