@@ -27,24 +27,6 @@ jobs:
           $tagVersion = $env:RELEASE_TAG.TrimStart('v')
           $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
           if ($tagVersion -ne $packageVersion) { throw "Release tag $env:RELEASE_TAG does not match package version $packageVersion." }
-      - name: Prepare bundled downloader tools for Windows
-        working-directory: frame-studio-linux
-        shell: pwsh
-        run: |
-          $vendor = Join-Path $PWD "vendor\win"
-          New-Item -ItemType Directory -Force -Path $vendor | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile (Join-Path $vendor "yt-dlp.exe")
-          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg-essentials.zip"
-          $unpack = Join-Path $env:RUNNER_TEMP "ffmpeg-essentials"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $archive
-          Expand-Archive -LiteralPath $archive -DestinationPath $unpack -Force
-          $bin = Get-ChildItem $unpack -Directory | ForEach-Object { Join-Path $_.FullName "bin" } | Where-Object { Test-Path (Join-Path $_ "ffmpeg.exe") } | Select-Object -First 1
-          if (!$bin) { throw "FFmpeg executable was not found in the downloaded archive." }
-          Copy-Item (Join-Path $bin "ffmpeg.exe") $vendor -Force
-          Copy-Item (Join-Path $bin "ffprobe.exe") $vendor -Force
-          Get-ChildItem $bin -Filter "*.dll" | Copy-Item -Destination $vendor -Force
-          & (Join-Path $vendor "yt-dlp.exe") --version
-          & (Join-Path $vendor "ffmpeg.exe") -version | Select-Object -First 1
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -81,26 +63,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y fakeroot dpkg rpm libfuse2
-      - name: Prepare bundled downloader tools for Linux
-        working-directory: frame-studio-linux
-        shell: bash
-        run: |
-          set -euo pipefail
-          vendor="$PWD/vendor/linux"
-          mkdir -p "$vendor"
-          curl -fsSL --retry 3 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" -o "$vendor/yt-dlp"
-          chmod 0755 "$vendor/yt-dlp"
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          curl -fsSL --retry 3 "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o "$tmp/ffmpeg.tar.xz"
-          tar -xJf "$tmp/ffmpeg.tar.xz" -C "$tmp"
-          ffmpeg_path="$(find "$tmp" -type f -name ffmpeg | head -n 1)"
-          ffprobe_path="$(find "$tmp" -type f -name ffprobe | head -n 1)"
-          test -n "$ffmpeg_path" && test -n "$ffprobe_path"
-          install -m 0755 "$ffmpeg_path" "$vendor/ffmpeg"
-          install -m 0755 "$ffprobe_path" "$vendor/ffprobe"
-          "$vendor/yt-dlp" --version
-          "$vendor/ffmpeg" -version | head -n 1
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
