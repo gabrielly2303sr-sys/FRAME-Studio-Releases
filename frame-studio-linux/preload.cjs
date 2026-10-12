@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('frameAPI', {
   listDownloadedMedia: (folder) => ipcRenderer.invoke('frame:downloaded-media-list', folder),
   createDownloadedMediaFolder: (parentFolder, name) => ipcRenderer.invoke('frame:downloaded-media-create-folder', { parentFolder, name }),
   resolveDownloadedMedia: (relativePath) => ipcRenderer.invoke('frame:downloaded-media-resolve', relativePath),
+  deleteDownloadedMedia: (relativePath) => ipcRenderer.invoke('frame:downloaded-media-delete', relativePath),
   openDownloadedMediaFolder: (folder) => ipcRenderer.invoke('frame:downloaded-media-open-folder', folder),
   downloadYoutube: (payload) => ipcRenderer.invoke('frame:youtube-download', payload),
   cancelYoutubeDownload: () => ipcRenderer.send('frame:youtube-cancel'),

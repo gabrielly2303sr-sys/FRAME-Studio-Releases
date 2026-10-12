@@ -1,16 +1,12 @@
-
-## 2.4.24 — Critical video scrubbing fix
-
+## 2.4.24
 ### [FIXED]
-- Timeline scrubbing now pauses project playback so the playhead and video elements cannot compete for the timeline clock.
-- Replaced approximate `fastSeek()` requests during dragging with coalesced `currentTime` seeks, keeping the latest requested playhead time.
-- On pointer release, the active video is retargeted precisely and the preview is refreshed after the decoder settles.
-- Video frame cache entries are invalidated for clips using the decoded asset so stale compositor textures cannot survive a completed seek.
-- Video seek events now reconcile against the current playhead rather than completing against an outdated request.
+- Reworked `frame-media://` responses to stream through the Web Streams API directly, with explicit byte-range and CORS metadata for the media decoder. This targets downloaded video/audio preview seeks that could fall back to the first frame.
+- Extracting audio now mutes the embedded audio on that video clip so only the extracted audio layer is heard. The state is saved with the project, can be toggled in the Audio inspector, and is excluded from the final audio mix while muted.
+- Local Linux source installs now copy `media-protocol.cjs` and `media-tools.cjs`, which the app's main process requires.
+### [ADDED]
+- Audio inspector checkbox to mute or restore a video's embedded audio independently of its volume control.
+- Regression coverage for downloaded-media range streaming and extract-audio mute/export behavior.
 
-### [TESTING]
-- Added regression tests for latest-target seek coalescing, precise final seeks, seeks already in flight, and playback pausing when scrubbing.
-- Packaged Electron GUI rendering must still be validated on a real install.
 ## 2.4.23
 ### [FIXED]
 - The bundled media tools check no longer reports FFmpeg and ffprobe as failed when they are present and working. `videoDownloaderToolsStatus()` passed `--version` to every executable; FFmpeg and ffprobe require `-version` (FFmpeg 7 prints its banner for `--version` but exits nonzero). Each tool is now checked with its own argument: yt-dlp `--version`, FFmpeg `-version`, ffprobe `-version`.
@@ -20,7 +16,10 @@
 - New shared helper `media-tools.cjs` is the single definition of version arguments, packaged path candidates and failure classification, used by the downloader status, export checks, the prepare script and the release verification script.
 - Diagnostics distinguish: missing file, permission denied, incompatible executable, missing runtime library, invalid arguments, timeout, and a genuine nonzero exit.
 - Release workflow runs the real bundled executables (correct per-tool arguments, exit codes enforced) inside the final Windows installer, AppImage, DEB and RPM before anything is published. Previously the Windows steps ignored native exit codes.
+- Scrubbing the timeline playhead no longer leaves downloaded videos on a frozen frame. Seeks during a playhead drag are now serialized (a seek in flight is not cancelled by the next pointer move) and use accurate seeks instead of `fastSeek`, which snapped to distant keyframes of long-GOP downloads. Downloaded media are served by the `frame-media://` protocol with proper HTTP range support (206/Content-Range/Accept-Ranges/Content-Length/Content-Type) via the new `media-protocol.cjs`.
 ### [ADDED]
+- Right-click a clip in the Media tab to delete it from the project (clips using it are removed too; Ctrl+Z restores it; the original file is untouched).
+- Right-click a file in the Saved tab to delete it from the Downloaded Media library (confirmation, moved to the trash; project media that used it is flagged as missing).
 - `scripts/verify-bundled-tools.cjs` smoke test and `npm run verify:tools:linux` / `verify:tools:win`.
 - Regression tests in `tests/2.4.23-media-tool-validation.test.js`.
 

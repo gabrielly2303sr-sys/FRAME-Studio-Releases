@@ -19,7 +19,7 @@ if command -v node >/dev/null 2>&1 && [[ -f "$SRC_DIR/scripts/prepare-bundled-to
 fi
 
 # Copy current application files.
-cp "$SRC_DIR/package.json" "$SRC_DIR/main.cjs" "$SRC_DIR/preload.cjs" "$SRC_DIR/media-export.cjs" "$SRC_DIR/index.html" "$SRC_DIR/customization.js" "$SRC_DIR/gif-decoder.js" "$INSTALL_DIR/"
+cp "$SRC_DIR/package.json" "$SRC_DIR/main.cjs" "$SRC_DIR/preload.cjs" "$SRC_DIR/media-export.cjs" "$SRC_DIR/media-protocol.cjs" "$SRC_DIR/media-tools.cjs" "$SRC_DIR/index.html" "$SRC_DIR/customization.js" "$SRC_DIR/gif-decoder.js" "$INSTALL_DIR/"
 rm -f "$INSTALL_DIR/model-runtime.js" "$INSTALL_DIR/frame-model-runtime.bundle.js"
 if [[ -d "$SRC_DIR/scripts" ]]; then cp -a "$SRC_DIR/scripts" "$INSTALL_DIR/"; fi
 

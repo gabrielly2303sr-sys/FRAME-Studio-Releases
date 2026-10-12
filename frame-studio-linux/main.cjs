@@ -7,6 +7,7 @@ const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
+const { serveMediaFile } = require('./media-protocol.cjs');
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -603,15 +604,18 @@ app.whenReady().then(() => {
   });
   protocol.handle('frame-media', async (request) => {
     try {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range, Content-Type',
+          'Access-Control-Max-Age': '600'
+        } });
+      }
       const target = new URL(request.url).searchParams.get('path');
       if (!target || !path.isAbsolute(target)) return new Response('Invalid media path', { status: 400 });
-      const range = request.headers.get('range');
-      const response = await net.fetch(pathToFileURL(target).toString(), range ? { headers: { Range: range } } : {});
-      const headers = new Headers(response.headers);
-      headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-      headers.set('Cache-Control', 'no-cache');
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+      if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { 'Allow': 'GET, HEAD, OPTIONS' } });
+      return await serveMediaFile(target, request.headers.get('range'), request.method);
     } catch (error) {
       return new Response(`Could not open media: ${error.message}`, { status: 404 });
     }
@@ -1226,6 +1230,40 @@ ipcMain.handle('frame:downloaded-media-resolve', async (event, relativeFile) => 
   const resolved = await resolveDownloadedMedia(relativeFile);
   const { root, ...safe } = resolved;
   return safe;
+});
+ipcMain.handle('frame:downloaded-media-delete', async (event, relativeFile) => {
+  assertTrustedSender(event);
+  // The path is validated against the Downloaded Media root (no traversal, no symlinks, supported media only).
+  const resolved = await resolveDownloadedMedia(relativeFile);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const ask = (options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options));
+  const confirm = await ask({
+    type: 'warning',
+    buttons: ['Mover para a lixeira', 'Cancelar'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Apagar mídia baixada',
+    message: `Apagar "${resolved.name}"?`,
+    detail: 'O arquivo será removido da biblioteca Saved. Projetos que usam este arquivo precisarão relinkar a mídia.'
+  });
+  if (confirm.response !== 0) return { deleted: false, canceled: true, relativePath: resolved.relativePath, path: resolved.path };
+  try {
+    await shell.trashItem(resolved.path);
+    return { deleted: true, trashed: true, relativePath: resolved.relativePath, path: resolved.path, name: resolved.name };
+  } catch (trashError) {
+    const permanent = await ask({
+      type: 'warning',
+      buttons: ['Apagar permanentemente', 'Cancelar'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Lixeira indisponível',
+      message: 'Não foi possível mover o arquivo para a lixeira.',
+      detail: `${trashError?.message || trashError}\n\nDeseja apagá-lo permanentemente? Esta ação não pode ser desfeita.`
+    });
+    if (permanent.response !== 0) return { deleted: false, canceled: true, relativePath: resolved.relativePath, path: resolved.path };
+    await fs.unlink(resolved.path);
+    return { deleted: true, trashed: false, relativePath: resolved.relativePath, path: resolved.path, name: resolved.name };
+  }
 });
 ipcMain.handle('frame:downloaded-media-open-folder', async (event, relativeFolder) => {
   assertTrustedSender(event);
