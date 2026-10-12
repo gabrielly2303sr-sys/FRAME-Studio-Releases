@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.18', 'package version');
+assert.equal(pkg.version, '2.4.19', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -46,7 +46,7 @@ for (const required of [
   'groups:layerGroups', 'version:9', '.tl-scroll{overflow:auto', '.timeline{overscroll-behavior:contain', 'function zoomTimelineAtPointer(', 'function timelineTrackGeometry(', 'function applyTrackLayoutOnly(', 'function sceneCameraBasis(', 'function sceneProjectPoint(', 'function attachSceneViewportNavigation(', 'function renderSceneCameraGizmo(', 'id="recordaudio"', 'id="extractaudio"', 'frameAPI.generateWaveform', 'frameAPI.saveAudioRecording', 'frameAPI.extractAudio'
 ]) assert.ok(html.includes(required), `integração 2.4.16 ausente: ${required}`);
 assert.doesNotMatch(renderer, /if\(track>0\)timelineTargetTrack=track/, 'arrastar mídia não pode prender o destino nas próximas inserções');
-assert.match(renderer, /const timelineDrop=\(e\)=>\{[\s\S]*?addClip\(a,\{start:x,\.\.\.\(track===null\?\{\}:\{track\}\)\}\);/, 'drop de mídia deve passar a faixa como destino só desta inserção');
+assert.match(renderer, /const timelineDrop=async\(e\)=>\{[\s\S]*?addClip\(a,\{start:x,\.\.\.\(track===null\?\{\}:\{track\}\)\}\);/, 'drop de mídia normal ou da biblioteca persistente deve passar a faixa como destino só desta inserção');
 assert.match(preload, /saveVideo:\s*\(name, buffer/, 'a API legada deve continuar explícita sem ser usada pelo novo renderer');
 assert.match(main, /transcodeWebmToMp4/, 'o processo principal mantém o caminho de transcodificação legado validado');
 assert.match(main, /renderFrameSequenceToMp4/, 'a exportação principal deve codificar uma sequência determinística de frames');

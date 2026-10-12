@@ -3,7 +3,7 @@ set -euo pipefail
 
 SRC_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SRC_DIR/package.json" | head -n1)"
-VERSION="${VERSION:-2.4.16}"
+VERSION="${VERSION:-2.4.19}"
 INSTALL_DIR="$HOME/.local/opt/frame-studio"
 APPS_DIR="$HOME/.local/share/applications"
 BIN_DIR="$HOME/.local/bin"
@@ -13,6 +13,17 @@ mkdir -p "$INSTALL_DIR" "$APPS_DIR" "$BIN_DIR"
 # Copy the current source files, including the local animated-GIF decoder.
 cp "$SRC_DIR/package.json" "$SRC_DIR/main.cjs" "$SRC_DIR/preload.cjs" "$SRC_DIR/media-export.cjs" "$SRC_DIR/index.html" "$SRC_DIR/customization.js" "$SRC_DIR/gif-decoder.js" "$INSTALL_DIR/"
 rm -f "$INSTALL_DIR/model-runtime.js" "$INSTALL_DIR/frame-model-runtime.bundle.js"
+
+# Copy optional local downloader binaries when this checkout was prepared by the release workflow.
+# The source ZIP only carries placeholders; official AppImage/DEB/RPM builds bundle tools via extraResources.
+if [[ -d "$SRC_DIR/vendor/linux" ]]; then
+  mkdir -p "$INSTALL_DIR/vendor/linux"
+  find "$SRC_DIR/vendor/linux" -maxdepth 1 -type f -exec cp -f {} "$INSTALL_DIR/vendor/linux/" \;
+  find "$INSTALL_DIR/vendor/linux" -maxdepth 1 -type f -exec chmod 755 {} \;
+fi
+if [[ -f "$SRC_DIR/THIRD_PARTY_NOTICES.md" ]]; then
+  cp -f "$SRC_DIR/THIRD_PARTY_NOTICES.md" "$INSTALL_DIR/THIRD_PARTY_NOTICES.md"
+fi
 
 # Prefer the Electron package maintained by Arch/CachyOS. This avoids npm's
 # install-script approval issue and uses a system-updated runtime.

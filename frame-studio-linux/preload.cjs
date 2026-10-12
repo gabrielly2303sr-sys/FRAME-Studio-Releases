@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('frameAPI', {
   saveAudioRecording: (buffer, name, extension) => ipcRenderer.invoke('frame:save-audio-recording', { buffer, name, extension }),
   extractAudio: (payload) => ipcRenderer.invoke('frame:extract-audio', payload),
   checkYoutubeTools: () => ipcRenderer.invoke('frame:youtube-tools-status'),
+  listDownloadedMedia: (folder) => ipcRenderer.invoke('frame:downloaded-media-list', folder),
+  createDownloadedMediaFolder: (parentFolder, name) => ipcRenderer.invoke('frame:downloaded-media-create-folder', { parentFolder, name }),
+  resolveDownloadedMedia: (relativePath) => ipcRenderer.invoke('frame:downloaded-media-resolve', relativePath),
+  openDownloadedMediaFolder: (folder) => ipcRenderer.invoke('frame:downloaded-media-open-folder', folder),
   downloadYoutube: (payload) => ipcRenderer.invoke('frame:youtube-download', payload),
   cancelYoutubeDownload: () => ipcRenderer.send('frame:youtube-cancel'),
   onYoutubeDownloadProgress: (callback) => {

@@ -1,4 +1,25 @@
-# FRAME Studio 2.4.18 — Live Preview & Downloader
+# FRAME Studio Changelog
+
+## 2.4.19
+
+### [ADDED]
+- Persistent Downloaded Media library under the OS-specific per-user application data directory, separate from project files.
+- Nested media folders, folder navigation, folder creation, and a destination folder selector in the downloader.
+- Drag downloaded media directly into the timeline or add it to the current project's Media bin.
+- Bundled yt-dlp and FFmpeg for official Windows and Linux package builds.
+
+### [IMPROVED]
+- Downloader prefers the packaged platform executables, then falls back to system tools in developer builds.
+- Downloads are saved directly into the selected library folder; intermediate download files use a temporary directory.
+
+### [COMPATIBILITY]
+- Windows NSIS and Linux AppImage/DEB/RPM builds prepare platform tools in CI before packaging.
+- The library resides in Electron userData (AppData on Windows and app-specific user data on Linux), not Android's `/Android/data` location.
+- Download only content you own or are explicitly allowed to save; no DRM/access-restriction bypass is provided.
+
+---
+
+## 2.4.18 — Live Preview & Downloader
 
 ## [FIXED]
 - During timeline scrubbing, retain the last decoded video frame instead of leaving the viewer blank while a new seek is pending. Replace it with the latest decoded frame as soon as the media element is ready.
@@ -18,9 +39,6 @@
 ## Notes
 - Continuous video scrubbing uses the last decoded frame while the next seek is in flight; an exact frame appears when decoding completes. This is a responsive preview strategy, not a guarantee that every intermediate frame can be decoded at display refresh rate.
 - Manual testing in a packaged Electron window remains required for codec-specific seeking, the downloader, and the full update flow.
-
-# FRAME Studio Changelog
-
 
 ## 2.4.16
 

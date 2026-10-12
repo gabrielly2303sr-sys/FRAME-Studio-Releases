@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, session } = require('electron');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
@@ -161,19 +162,166 @@ function setupAutomaticUpdates() {
   periodicCheck.unref?.();
 }
 
-async function videoDownloaderToolsStatus() {
-  const ytdlpCommand = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
-  const ffmpegCommand = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-  const check = async (command, args) => {
+function toolFilename(tool) {
+  const suffix = process.platform === 'win32' ? '.exe' : '';
+  return `${tool}${suffix}`;
+}
+
+function bundledToolPath(tool) {
+  const filename = toolFilename(tool);
+  const platformFolder = process.platform === 'win32' ? 'win' : process.platform === 'linux' ? 'linux' : process.platform;
+  const candidates = [];
+  if (app.isPackaged && process.resourcesPath) candidates.push(path.join(process.resourcesPath, 'downloader', filename));
+  candidates.push(path.join(__dirname, 'vendor', platformFolder, filename));
+  for (const candidate of candidates) {
     try {
-      const result = await execFileAsync(command, args, { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
-      return { available: true, version: String(result.stdout || '').split(/\r?\n/)[0].trim() };
+      if (fsSync.statSync(candidate).isFile()) return candidate;
+    } catch {}
+  }
+  return null;
+}
+
+function downloaderToolCommand(tool) {
+  return bundledToolPath(tool) || toolFilename(tool);
+}
+
+function configureBundledMediaTools() {
+  const ffmpeg = bundledToolPath('ffmpeg');
+  const ffprobe = bundledToolPath('ffprobe');
+  if (ffmpeg && !process.env.FRAME_FFMPEG_PATH) process.env.FRAME_FFMPEG_PATH = ffmpeg;
+  if (ffprobe && !process.env.FRAME_FFPROBE_PATH) process.env.FRAME_FFPROBE_PATH = ffprobe;
+}
+
+async function videoDownloaderToolsStatus() {
+  const check = async (tool) => {
+    const bundledPath = bundledToolPath(tool);
+    const command = bundledPath || toolFilename(tool);
+    try {
+      const result = await execFileAsync(command, ['--version'], { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
+      const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+      return { available: true, version: output.split(/\r?\n/).map(line => line.trim()).find(Boolean) || '', source: bundledPath ? 'bundled' : 'system' };
     } catch (error) {
-      return { available: false, version: '', reason: error?.code === 'ENOENT' ? 'not-found' : String(error?.message || error).slice(0, 240) };
+      return { available: false, version: '', source: 'missing', reason: error?.code === 'ENOENT' ? 'not-found' : String(error?.message || error).slice(0, 240) };
     }
   };
-  const [ytDlp, ffmpeg] = await Promise.all([check(ytdlpCommand, ['--version']), check(ffmpegCommand, ['-version'])]);
-  return { ytDlp: ytDlp.available, ytDlpVersion: ytDlp.version, ffmpeg: ffmpeg.available, ffmpegVersion: ffmpeg.version, platform: process.platform };
+  const [ytDlp, ffmpeg] = await Promise.all([check('yt-dlp'), check('ffmpeg')]);
+  return {
+    ytDlp: ytDlp.available,
+    ytDlpVersion: ytDlp.version,
+    ytDlpSource: ytDlp.source,
+    ffmpeg: ffmpeg.available,
+    ffmpegVersion: ffmpeg.version,
+    ffmpegSource: ffmpeg.source,
+    ffprobe: (await check('ffprobe')).available,
+    bundled: ytDlp.source === 'bundled' && ffmpeg.source === 'bundled',
+    platform: process.platform
+  };
+}
+
+const DOWNLOADED_MEDIA_EXTENSIONS = new Set([
+  '.mp4', '.m4v', '.mov', '.mkv', '.webm', '.avi', '.mpeg', '.mpg', '.wmv',
+  '.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif'
+]);
+
+function downloadedMediaRoot() {
+  return path.join(app.getPath('userData'), 'Media Library', 'Downloaded Media');
+}
+
+function normalizeLibraryRelative(value, allowRoot = true) {
+  if (value == null || value === '') {
+    if (allowRoot) return '';
+    throw new Error('Choose a downloaded media file.');
+  }
+  const raw = String(value).trim().replace(/\\/g, '/');
+  if (!raw || raw.startsWith('/') || /^[a-zA-Z]:/.test(raw) || raw.includes('\0')) throw new Error('Invalid library path.');
+  const pieces = raw.split('/').filter(Boolean);
+  if (!pieces.length && allowRoot) return '';
+  if (pieces.some(piece => piece === '.' || piece === '..' || piece.includes('\0'))) throw new Error('Invalid library path.');
+  return pieces.join('/');
+}
+
+function resolveLibraryPath(relative = '') {
+  const root = path.resolve(downloadedMediaRoot());
+  const normalized = normalizeLibraryRelative(relative, true);
+  const target = path.resolve(root, ...normalized.split('/').filter(Boolean));
+  const fromRoot = path.relative(root, target);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot)) throw new Error('Library path escapes the downloaded-media folder.');
+  return { root, target, relative: normalized };
+}
+
+function downloadedMediaKind(extension) {
+  const ext = String(extension || '').toLowerCase();
+  if (['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac'].includes(ext)) return 'audio';
+  if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif'].includes(ext)) return 'image';
+  if (['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.avi', '.mpeg', '.mpg', '.wmv'].includes(ext)) return 'video';
+  return null;
+}
+
+async function collectLibraryFolders(root) {
+  const result = [''];
+  const walk = async (directory, relative, depth) => {
+    if (depth >= 12) return;
+    let entries = [];
+    try { entries = await fs.readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith('.')) continue;
+      const childRelative = relative ? `${relative}/${entry.name}` : entry.name;
+      result.push(childRelative);
+      await walk(path.join(directory, entry.name), childRelative, depth + 1);
+    }
+  };
+  await walk(root, '', 0);
+  return result.sort((a, b) => a.localeCompare(b));
+}
+
+async function listDownloadedMediaFolder(relativeFolder = '') {
+  const { root, target, relative } = resolveLibraryPath(relativeFolder);
+  await fs.mkdir(target, { recursive: true });
+  const stat = await fs.lstat(target);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('The selected library location is not a folder.');
+  const rawEntries = await fs.readdir(target, { withFileTypes: true });
+  const entries = [];
+  for (const entry of rawEntries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = path.join(target, entry.name);
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      entries.push({ type: 'folder', name: entry.name, relativePath: relative ? `${relative}/${entry.name}` : entry.name });
+      continue;
+    }
+    if (!entry.isFile() || entry.isSymbolicLink()) continue;
+    const extension = path.extname(entry.name).toLowerCase();
+    const kind = downloadedMediaKind(extension);
+    if (!kind) continue;
+    let fileStat;
+    try { fileStat = await fs.stat(fullPath); } catch { continue; }
+    entries.push({ type: 'file', name: entry.name, extension, kind, size: fileStat.size, modifiedAt: fileStat.mtimeMs, relativePath: relative ? `${relative}/${entry.name}` : entry.name });
+  }
+  entries.sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1);
+  const parentFolder = relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
+  return { rootLabel: 'Downloaded Media', currentFolder: relative, parentFolder, entries, folders: await collectLibraryFolders(root) };
+}
+
+async function createDownloadedMediaFolder(relativeParent, folderName) {
+  const parent = normalizeLibraryRelative(relativeParent, true);
+  const name = String(folderName || '').trim();
+  if (!name || name === '.' || name === '..' || /[\\/:*?"<>|\u0000-\u001f]/.test(name)) throw new Error('Use a folder name without path separators or reserved characters.');
+  const clean = name.replace(/\.+$/g, '').trim();
+  if (!clean || clean.startsWith('.')) throw new Error('Choose a different folder name.');
+  const relative = parent ? `${parent}/${clean}` : clean;
+  const { target } = resolveLibraryPath(relative);
+  await fs.mkdir(target, { recursive: false });
+  return { name: clean, relativePath: relative };
+}
+
+async function resolveDownloadedMedia(relativeFile) {
+  const { root, target, relative } = resolveLibraryPath(normalizeLibraryRelative(relativeFile, false));
+  const stat = await fs.lstat(target).catch(() => null);
+  if (!stat?.isFile() || stat.isSymbolicLink()) throw new Error('Downloaded media was not found in the library.');
+  const extension = path.extname(target).toLowerCase();
+  const kind = downloadedMediaKind(extension);
+  if (!kind) throw new Error('This file type is not supported in the media library.');
+  return { path: target, name: path.basename(target), extension, kind, size: stat.size, relativePath: relative, root };
 }
 
 function validateYouTubeURL(value) {
@@ -205,27 +353,26 @@ async function runYoutubeDownload(event, payload) {
   if (!allowedFps.has(maxFps)) throw new Error('Choose a supported maximum FPS.');
 
   const tools = await videoDownloaderToolsStatus();
-  if (!tools.ytDlp) throw new Error(process.platform === 'win32'
-    ? 'yt-dlp was not found in PATH. Install yt-dlp.exe and reopen FRAME Studio.'
-    : 'yt-dlp was not found. On CachyOS/Arch, install it with: sudo pacman -S yt-dlp ffmpeg');
-  if (!tools.ffmpeg) throw new Error(process.platform === 'win32'
-    ? 'FFmpeg was not found in PATH. Install FFmpeg and reopen FRAME Studio.'
-    : 'FFmpeg was not found. On CachyOS/Arch, install it with: sudo pacman -S yt-dlp ffmpeg');
+  if (!tools.ytDlp) throw new Error('Bundled yt-dlp is unavailable and no system yt-dlp executable was found. Reinstall the official FRAME Studio package or install yt-dlp.');
+  if (!tools.ffmpeg) throw new Error('Bundled FFmpeg is unavailable and no system FFmpeg executable was found. Reinstall the official FRAME Studio package or install FFmpeg.');
 
-  const win = BrowserWindow.fromWebContents(event.sender);
+  const { root, target: targetDir, relative: targetRelative } = resolveLibraryPath(payload?.folder || '');
+  await fs.mkdir(targetDir, { recursive: true });
+  const folderStat = await fs.lstat(targetDir);
+  if (!folderStat.isDirectory() || folderStat.isSymbolicLink()) throw new Error('Selected download destination is not a valid folder.');
+  const tempDir = path.join(app.getPath('temp'), 'frame-ytdlp', randomUUID());
+  await fs.mkdir(tempDir, { recursive: true });
   const ext = format === 'mp3' ? 'mp3' : 'mp4';
-  const picked = await dialog.showSaveDialog(win, {
-    title: format === 'mp3' ? 'Save YouTube audio' : 'Save YouTube video',
-    defaultPath: path.join(app.getPath('videos'), format === 'mp3' ? 'YouTube Audio.mp3' : 'YouTube Video.mp4'),
-    buttonLabel: 'Download',
-    filters: [{ name: format.toUpperCase(), extensions: [ext] }]
-  });
-  if (picked.canceled || !picked.filePath) return { canceled: true };
-  const outputPath = picked.filePath;
-  const parsed = path.parse(outputPath);
-  const outputTemplate = path.join(parsed.dir, `${parsed.name}.%(ext)s`);
-  const ytdlpCommand = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
-  const args = ['--no-playlist', '--newline', '--progress', '--windows-filenames', '--no-overwrites', '--progress-template', 'download:FRAME_PROGRESS:%(progress._percent_str)s|%(progress.eta)s', '-o', outputTemplate];
+  const ytdlpCommand = downloaderToolCommand('yt-dlp');
+  const bundledFfmpeg = bundledToolPath('ffmpeg');
+  const args = [
+    '--no-playlist', '--newline', '--progress', '--windows-filenames', '--no-overwrites',
+    '--progress-template', 'download:FRAME_PROGRESS:%(progress._percent_str)s|%(progress.eta)s',
+    '--paths', `home:${targetDir}`, '--paths', `temp:${tempDir}`,
+    '-o', '%(title).180B [%(id)s].%(ext)s',
+    '--print', 'after_move:FRAME_OUTPUT:%(filepath)s'
+  ];
+  if (bundledFfmpeg) args.push('--ffmpeg-location', path.dirname(bundledFfmpeg));
   if (format === 'mp3') {
     args.push('-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0');
   } else {
@@ -233,51 +380,84 @@ async function runYoutubeDownload(event, payload) {
     args.push('-f', `bv*${cap}+ba/b${cap}`, '--merge-output-format', 'mp4', '--remux-video', 'mp4');
   }
   args.push('--', url);
-  sendYoutubeProgress(event.sender, { stage: 'starting', percent: 0, format, output: path.basename(outputPath) });
+  sendYoutubeProgress(event.sender, { stage: 'starting', percent: 0, format, folder: targetRelative, detail: `Saving to ${targetRelative || 'Downloaded Media'}` });
 
-  await new Promise((resolve, reject) => {
-    const child = spawn(ytdlpCommand, args, { cwd: parsed.dir, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
-    activeYoutubeDownloads.set(event.sender.id, child);
-    let settled = false, lineBuffer = '', lastLog = '';
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      activeYoutubeDownloads.delete(event.sender.id);
-      if (error) reject(error); else resolve();
-    };
-    const processText = text => {
-      lineBuffer += String(text || '');
-      const lines = lineBuffer.split(/\r?\n/);
-      lineBuffer = lines.pop() || '';
-      for (const line of lines) {
-        const progress = line.match(/FRAME_PROGRESS:\s*([\d.]+)%?\s*\|\s*(.*)/);
-        if (progress) {
-          sendYoutubeProgress(event.sender, { stage: 'downloading', percent: Math.max(0, Math.min(100, Number(progress[1]) || 0)), eta: progress[2].trim() });
-        } else if (line.trim()) {
-          lastLog = line.trim().slice(0, 1200);
-          if (/\[Merger\]|\[VideoConvertor\]|\[ExtractAudio\]|Post-process|Deleting original file/i.test(line)) sendYoutubeProgress(event.sender, { stage: 'processing', percent: 100, detail: lastLog });
+  let finalOutputPath = '';
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(ytdlpCommand, args, { cwd: tempDir, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      activeYoutubeDownloads.set(event.sender.id, child);
+      let settled = false, lineBuffer = '', lastLog = '';
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        activeYoutubeDownloads.delete(event.sender.id);
+        if (error) reject(error); else resolve();
+      };
+      const processText = (text, flush = false) => {
+        lineBuffer += String(text || '');
+        const lines = lineBuffer.split(/\r?\n/);
+        lineBuffer = flush ? '' : (lines.pop() || '');
+        if (flush && lines.length === 0 && text) lines.push(String(text));
+        for (const line of lines) {
+          const output = line.match(/^FRAME_OUTPUT:(.*)$/);
+          if (output) { finalOutputPath = output[1].trim(); continue; }
+          const progress = line.match(/FRAME_PROGRESS:\s*([\d.]+)%?\s*\|\s*(.*)/);
+          if (progress) {
+            sendYoutubeProgress(event.sender, { stage: 'downloading', percent: Math.max(0, Math.min(100, Number(progress[1]) || 0)), eta: progress[2].trim(), folder: targetRelative });
+          } else if (line.trim()) {
+            lastLog = line.trim().slice(0, 1200);
+            if (/\[Merger\]|\[VideoConvertor\]|\[ExtractAudio\]|Post-process|Deleting original file/i.test(line)) sendYoutubeProgress(event.sender, { stage: 'processing', percent: 100, detail: lastLog });
+          }
         }
-      }
-    };
-    child.stdout.on('data', processText);
-    child.stderr.on('data', processText);
-    child.once('error', error => finish(new Error(error?.code === 'ENOENT' ? 'yt-dlp disappeared from PATH. Install it and restart FRAME Studio.' : `Could not start yt-dlp: ${error?.message || error}`)));
-    child.once('close', code => {
-      if (child.__frameCancelled) {
-        sendYoutubeProgress(event.sender, { stage: 'cancelled', percent: 0 });
-        finish(new Error('Download canceled by user.'));
-        return;
-      }
-      if (code === 0) {
-        sendYoutubeProgress(event.sender, { stage: 'complete', percent: 100, output: path.basename(outputPath), detail: `Saved to ${outputPath}` });
-        finish();
-      } else {
-        sendYoutubeProgress(event.sender, { stage: 'error', percent: 0, detail: lastLog || `yt-dlp exited with code ${code}` });
-        finish(new Error(`Download failed (exit code ${code}). ${lastLog}`));
-      }
+      };
+      child.stdout.on('data', processText);
+      child.stderr.on('data', processText);
+      child.once('error', error => finish(new Error(error?.code === 'ENOENT' ? 'Bundled yt-dlp could not start. Reinstall the official package or install yt-dlp.' : `Could not start yt-dlp: ${error?.message || error}`)));
+      child.once('close', code => {
+        if (lineBuffer.trim()) processText('\n', true);
+        if (child.__frameCancelled) {
+          sendYoutubeProgress(event.sender, { stage: 'cancelled', percent: 0 });
+          finish(new Error('Download canceled by user.'));
+          return;
+        }
+        if (code === 0) {
+          finish();
+        } else {
+          sendYoutubeProgress(event.sender, { stage: 'error', percent: 0, detail: lastLog || `yt-dlp exited with code ${code}` });
+          finish(new Error(`Download failed (exit code ${code}). ${lastLog}`));
+        }
+      });
     });
-  });
-  return { canceled: false, path: outputPath, format };
+
+    let outputPath = finalOutputPath
+      ? (path.isAbsolute(finalOutputPath) ? path.resolve(finalOutputPath) : path.resolve(targetDir, finalOutputPath))
+      : '';
+    if (outputPath) {
+      const relativeToTarget = path.relative(targetDir, outputPath);
+      if (relativeToTarget === '..' || relativeToTarget.startsWith(`..${path.sep}`) || path.isAbsolute(relativeToTarget)) throw new Error('Downloader reported a file outside the selected media folder.');
+    } else {
+      // Fallback for yt-dlp releases which do not emit the after_move print line.
+      const entries = await fs.readdir(targetDir, { withFileTypes: true });
+      const candidates = [];
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const candidate = path.join(targetDir, entry.name);
+        const stat = await fs.stat(candidate).catch(() => null);
+        if (stat?.isFile() && stat.mtimeMs >= Date.now() - 10 * 60 * 1000 && path.extname(entry.name).toLowerCase() === `.${ext}`) candidates.push({ path: candidate, mtimeMs: stat.mtimeMs });
+      }
+      candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      outputPath = candidates[0]?.path || '';
+    }
+    const outputStat = outputPath ? await fs.stat(outputPath).catch(() => null) : null;
+    if (!outputPath || !outputStat?.isFile()) throw new Error('Download finished, but the final media file could not be found in the selected library folder.');
+    const relativePath = path.relative(root, outputPath).split(path.sep).join('/');
+    sendYoutubeProgress(event.sender, { stage: 'complete', percent: 100, output: path.basename(outputPath), relativePath, folder: targetRelative, detail: `Saved to ${targetRelative ? `Downloaded Media/${targetRelative}` : 'Downloaded Media'}` });
+    return { canceled: false, path: outputPath, relativePath, format, folder: targetRelative };
+  } finally {
+    activeYoutubeDownloads.delete(event.sender.id);
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function createWindow() {
@@ -301,6 +481,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  configureBundledMediaTools();
   // Ask for microphone access only after the user starts an explicit recording.
   // This is scoped to the trusted local renderer and grants audio capture only.
   const appSession = session.defaultSession;
@@ -944,6 +1125,29 @@ ipcMain.handle('frame:import-fonts-zip', async event => {
 ipcMain.handle('frame:open-path', async (event, target) => {
   assertTrustedSender(event);
   if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error('Invalid path.');
+  return shell.openPath(target);
+});
+
+ipcMain.handle('frame:downloaded-media-list', async (event, relativeFolder) => {
+  assertTrustedSender(event);
+  return listDownloadedMediaFolder(relativeFolder || '');
+});
+ipcMain.handle('frame:downloaded-media-create-folder', async (event, payload) => {
+  assertTrustedSender(event);
+  return createDownloadedMediaFolder(payload?.parentFolder || '', payload?.name || '');
+});
+ipcMain.handle('frame:downloaded-media-resolve', async (event, relativeFile) => {
+  assertTrustedSender(event);
+  const resolved = await resolveDownloadedMedia(relativeFile);
+  const { root, ...safe } = resolved;
+  return safe;
+});
+ipcMain.handle('frame:downloaded-media-open-folder', async (event, relativeFolder) => {
+  assertTrustedSender(event);
+  const { target } = resolveLibraryPath(relativeFolder || '');
+  await fs.mkdir(target, { recursive: true });
+  const stat = await fs.lstat(target);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('The selected library location is not a folder.');
   return shell.openPath(target);
 });
 

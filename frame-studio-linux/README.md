@@ -1,22 +1,36 @@
-# FRAME Studio 2.4.18 — Live Preview & Downloader
+# FRAME Studio 2.4.19 — Downloaded Media Library
 
 This folder contains the Electron source code. It is not a prebuilt installer.
 
-## 2.4.18
+## 2.4.19
 
-- Live timeline scrubbing: retains the last decoded video frame while a seek is pending, coalesces redraws to animation frames, uses `fastSeek` during drag when available, and requests a final accurate seek on release.
-- Fixes preview rendering paths that otherwise returned before composing the current timeline frame while a video was seeking.
-- Double-click text editing remains wired to selection and the text content field.
-- Easing controls support bounded draggable handles for Bounce, Elastic, and Steps.
-- Adds a YouTube downloader pane for authorized public content, with MP4/MP3 output and resolution/FPS options.
+- Adds a persistent Downloaded Media library independent of the current project.
+- Create nested folders and select a destination folder before downloading.
+- Downloaded media are stored locally and can be dragged directly from the library to the timeline, or added to the project's Media bin.
+- Official Windows and Linux releases bundle platform-specific `yt-dlp` and FFmpeg executables; development builds can use tools on `PATH`.
+- Uses safe relative-path validation for library browsing and media resolution.
 
-## Downloader requirements
+## Storage location
 
-The downloader requires system-installed `yt-dlp` and `ffmpeg`. On CachyOS/Arch: `sudo pacman -S yt-dlp ffmpeg`. The app requires a rights/permission confirmation and does not provide DRM or access-restriction bypass functionality. Only save content you own or have explicit permission/a license to download. Availability and format selection depend on the source video and the installed yt-dlp version.
+The desktop app stores downloads in `app.getPath('userData')/Media Library/Downloaded Media`. On Windows this resolves inside the user's AppData profile; on Linux it resolves inside Electron's app-specific user-data directory (normally under the user's config directory). This path persists across projects for the same user. `/Android/data` is an Android-specific location and is not used by this desktop Electron build.
+
+## Downloader support
+
+The release workflow downloads platform-specific binaries before packaging:
+- Linux: standalone `yt-dlp` plus a static FFmpeg/ffprobe build.
+- Windows: `yt-dlp.exe` plus FFmpeg/ffprobe and required DLLs.
+
+Development checkouts first look for `vendor/<platform>` executables, then fall back to `PATH`. Official users do not need to run `sudo pacman -S yt-dlp ffmpeg` when the corresponding packaged tools are present. Only download content you own or are explicitly authorized/licensed to save; do not bypass DRM or access restrictions.
+
+See `THIRD_PARTY_NOTICES.md` for upstream sources and licensing notes. Redistributors must preserve applicable notices and comply with the relevant binary licenses.
+
+## Automatic updates
+
+GitHub Releases publish platform-specific update metadata: `latest.yml` for the Windows NSIS installer and `latest-linux.yml` for Linux AppImage builds. These metadata files must be attached to the same published release as their matching installers. The release workflow verifies that the files are generated before uploading assets. Linux `.deb` and `.rpm` users should update through their package manager rather than the in-app AppImage updater.
 
 ## Build and test
 
-Requires Node.js 22+ and npm. MP4 export integration tests require FFmpeg and ffprobe.
+Requires Node.js 22+ and npm. MP4 export integration tests may use FFmpeg/ffprobe from the host environment unless packaged tool paths are configured.
 
 ```bash
 npm install --no-audit --no-fund
@@ -24,15 +38,10 @@ npm test
 npm run build:linux
 ```
 
-On Windows, run `BUILD-WINDOWS.bat`. Electron Builder is pinned to version 25.1.8.
+On Windows, run `BUILD-WINDOWS.bat`. Electron Builder is pinned to version 25.1.8. The GitHub Release workflow prepares the platform-specific downloader tools in `vendor/` before running the build.
 
-## Notes and limitations
+## Notes
 
-- This remains an Electron/Chromium/V8 application; JavaScript is interpreted/JIT-compiled by V8. The update improves scheduling and decoded-frame reuse rather than changing the runtime architecture.
-- The timeline preview may show the last decoded frame briefly while seeking. Intermediate frames can still be skipped by long-GOP or slow-to-seek codecs.
-- The downloader UI and IPC require a real GUI test on Linux/Windows.
-- AppImage is the recommended standalone Linux package; some distributions need FUSE 2 compatibility. `.deb` and `.rpm` packages should be updated through their package manager.
-
-## GitHub Release and auto-update metadata
-
-The `.github/workflows/release.yml` workflow builds when a Release is published. Verify `latest.yml`, `.blockmap`, `latest-linux.yml`, and both platform jobs before announcing automatic updates.
+- The app remains an Electron/Chromium/V8 application; this change does not convert it to a native application.
+- Linux AppImage is the recommended standalone Linux package; some distributions may still need FUSE compatibility support. `.deb` and `.rpm` should be updated through their package manager.
+- A real packaged-UI test is still required on Windows and Linux before announcing the release.
