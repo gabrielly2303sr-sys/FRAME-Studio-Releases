@@ -1,14 +1,20 @@
-# FRAME Studio 2.4.23 — Bundled Media Tools Verification Fix
+# FRAME Studio 2.4.24 — Critical Video Scrubbing Fix
 
-The 2.4.22 AppImage found yt-dlp, FFmpeg and ffprobe inside its mounted resources but still reported "Bundled media tools could not start".
+This source kit is based on the existing FRAME Studio 2.4.23 media-tool verification fix. It addresses a race between timeline drag, the main playback loop, HTMLVideoElement seeks, and cached compositor textures.
 
-### Root cause
-`videoDownloaderToolsStatus()` in `main.cjs` ran every tool with `--version`. FFmpeg and ffprobe use `-version`; with `--version` they print their banner and exit nonzero, so the check marked working binaries as failed. `media-export.cjs` already used `-version`, so the two checks disagreed.
+## Key changes
+- Scrubbing stops timeline playback and pauses media elements before moving the playhead.
+- Shared `video-preview-seek.js` coalesces small seek requests but continues forwarding meaningful movement to the latest target.
+- Exact `currentTime` seeks are used rather than `fastSeek()` during interactive scrubbing, avoiding approximate keyframe jumps.
+- Release of the pointer forces a precise final target seek.
+- `seeked`, `loadeddata`, `loadedmetadata`, `timeupdate`, and decoded-frame callbacks reconcile the active clip with the current playhead and invalidate its compositor texture cache.
+- Regression coverage exercises the actual shared seek helper.
 
-### 2.4.23 fixes
-- New shared helper `media-tools.cjs`: one definition of per-tool version arguments (yt-dlp `--version`, ffmpeg/ffprobe `-version`), packaged path resolution and failure classification.
-- `main.cjs`, `media-export.cjs` and `scripts/prepare-bundled-tools.cjs` use it.
-- `scripts/verify-bundled-tools.cjs` runs the real executables; the release workflow runs it on the unpacked app, the final AppImage, DEB, RPM and the installed Windows app.
-- Regression tests: `tests/2.4.23-media-tool-validation.test.js`.
+## Local validation
+```sh
+cd frame-studio-linux
+npm install --no-audit --no-fund
+npm test
+```
 
-The source ZIP has no native binaries; the release workflow fetches platform artifacts and packs them. A packaged AppImage/Windows installer has NOT been built or executed in the environment that prepared this kit; do not publish until the release workflow passes and the final packages are checked with the checklist in RELEASE-VERIFICATION-2.4.23.md.
+The automated tests do not replace manual verification of a real packaged Electron build with a long GOP/H.264 video. Test by dragging the playhead slowly and quickly, releasing mid-seek, scrubbing while playback is running, and then pressing Play.

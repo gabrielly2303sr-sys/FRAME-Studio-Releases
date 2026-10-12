@@ -8,14 +8,14 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.23');
+assert.equal(pkg.version, '2.4.24');
 
 assert.match(html, /function scheduleScrubPreviewDraw\(/, 'scrub redraw is coalesced per animation frame');
 assert.match(html, /function rememberVideoPreviewFrame\(/, 'a decoded video frame is kept for seek gaps');
 assert.match(html, /videoFramePending=!playing&&!offlineRendering&&previewMode==='timeline'&&hasUnsyncedActiveVideoFrame\(playhead\)/, 'the preview recognizes pending seeks without returning early');
 assert.match(html, /staleVideoFrame=cachedVideoPreviewFrame\(a\.id\)/, 'renderer can compose the last decoded video frame while seeking');
 assert.match(html, /function seekVideoPreviewTo\(/, 'scrub seeks have a latest-wins helper');
-assert.match(html, /typeof el\.fastSeek==='function'/, 'fast seeks are used during scrubbing when supported');
+assert.match(html, /helper\.requestSeek\(el,wanted/, 'scrubbing uses the shared latest-target seek helper instead of coarse fastSeek');
 assert.match(html, /syncMedia\(true\);previewQualityMode='full'/, 'release from scrubbing re-requests the exact target');
 assert.match(html, /function attachPreviewTextEditing\(/, 'preview double-click text editor remains available');
 assert.match(html, /addEventListener\('dblclick',onDoubleClick,true\)/, 'preview wrapper and canvas share a capture-phase text edit handler');
@@ -35,27 +35,28 @@ assert.match(html, /maximum resolution|Maximum resolution/, 'resolution options 
 assert.match(html, /Maximum FPS/, 'FPS options exist');
 assert.match(html, /Do not use for DRM|Do not bypass DRM|Do not bypass DRM or access restrictions/i, 'UI warns against bypassing access restrictions');
 
-// Exercise the real seek scheduler using a fake video element.
-const helper = html.match(/function seekVideoPreviewTo\(el,target\)\{[\s\S]*?\nfunction attachTimelineVideoPreviewEvents/);
-assert.ok(helper, 'seek helper source located');
-const seekSource = helper[0].replace(/\nfunction attachTimelineVideoPreviewEvents[\s\S]*$/, '');
+// Exercise the actual shared seek helper through the renderer integration wrapper.
+const helper = html.match(/function seekVideoPreviewTo\(el,target,options=\{\}\)\{[^\n]*/);
+assert.ok(helper, 'seek wrapper source located');
 const context = vm.createContext({
   projectFPS: 30,
   playheadDrag: { startX: 0 },
   performance: { now: () => 1000 },
+  window: { FrameVideoSeek: require('../video-preview-seek.js') },
   console
 });
-new vm.Script(seekSource, { filename: 'seekVideoPreviewTo.js' }).runInContext(context);
-let fastSeekTarget = null;
-const duringDrag = { currentTime: 1, seeking: true, fastSeek(target) { fastSeekTarget = target; } };
+new vm.Script(helper[0], { filename: 'seekVideoPreviewTo.js' }).runInContext(context);
+let assigned = null, fastSeekCalls = 0;
+const duringDrag = { _time: 1, currentTime: 1, seeking: true, readyState: 2, set currentTime(value) { assigned = value; this._time = value; }, fastSeek() { fastSeekCalls++; } };
 context.seekVideoPreviewTo(duringDrag, 7.25);
 assert.equal(duringDrag.__framePendingSeek, 7.25);
-assert.equal(fastSeekTarget, 7.25, 'drag should request the latest fast-seek target');
+assert.equal(assigned, 7.25, 'drag should seek directly to the newest timeline target');
+assert.equal(fastSeekCalls, 0, 'interactive scrubbing must not use coarse fastSeek keyframe jumps');
 context.playheadDrag = null;
-let assigned = null;
-const afterDrag = { currentTime: 0, seeking: true, set currentTime(value) { assigned = value; }, get currentTime() { return 0; } };
-context.seekVideoPreviewTo(afterDrag, 4.5);
-assert.equal(assigned, 4.5, 'final/non-drag seek should request the accurate currentTime target');
+assigned = null;
+const afterDrag = { _time: 0, currentTime: 0, seeking: true, readyState: 2, set currentTime(value) { assigned = value; this._time = value; } };
+context.seekVideoPreviewTo(afterDrag, 4.5, { precise: true });
+assert.equal(assigned, 4.5, 'final/non-drag seek must request the accurate target');
 assert.equal(afterDrag.__framePendingSeek, 4.5);
 
 console.log('FRAME Studio 2.4.23 live preview/downloader checks: OK');

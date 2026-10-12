@@ -1,3 +1,16 @@
+
+## 2.4.24 — Critical video scrubbing fix
+
+### [FIXED]
+- Timeline scrubbing now pauses project playback so the playhead and video elements cannot compete for the timeline clock.
+- Replaced approximate `fastSeek()` requests during dragging with coalesced `currentTime` seeks, keeping the latest requested playhead time.
+- On pointer release, the active video is retargeted precisely and the preview is refreshed after the decoder settles.
+- Video frame cache entries are invalidated for clips using the decoded asset so stale compositor textures cannot survive a completed seek.
+- Video seek events now reconcile against the current playhead rather than completing against an outdated request.
+
+### [TESTING]
+- Added regression tests for latest-target seek coalescing, precise final seeks, seeks already in flight, and playback pausing when scrubbing.
+- Packaged Electron GUI rendering must still be validated on a real install.
 ## 2.4.23
 ### [FIXED]
 - The bundled media tools check no longer reports FFmpeg and ffprobe as failed when they are present and working. `videoDownloaderToolsStatus()` passed `--version` to every executable; FFmpeg and ffprobe require `-version` (FFmpeg 7 prints its banner for `--version` but exits nonzero). Each tool is now checked with its own argument: yt-dlp `--version`, FFmpeg `-version`, ffprobe `-version`.
