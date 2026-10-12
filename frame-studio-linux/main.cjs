@@ -309,7 +309,12 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
       temporaryOutputPath: path.join(tempDir, 'rendered.mp4'),
       framePattern: path.join(tempDir, 'frame-%08d.png'),
       nextFrame: 0, expectedFrames: frameCount, fps, duration,
-      crf: Number(payload.crf) || 18, audioClips
+      crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
+      rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
+      videoBitrate: Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)),
+      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'medium',
+      audioBitrate: [96, 128, 160, 192, 256, 320].includes(Number(payload.audioBitrate)) ? Number(payload.audioBitrate) : 192,
+      audioClips
     };
     activeExports.set(event.sender.id, { controller, frameSession: session });
     sendExportProgress(event.sender, { stage: 'rendering', progress: 0, seconds: 0, duration });
@@ -361,6 +366,10 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
       expectedDuration: session.duration,
       fps: session.fps,
       crf: session.crf,
+      rateMode: session.rateMode,
+      videoBitrate: session.videoBitrate,
+      encoderPreset: session.encoderPreset,
+      audioBitrate: session.audioBitrate,
       audioClips: session.audioClips,
       signal: job.controller.signal,
       onProcess: (_kind, child) => {
@@ -375,7 +384,7 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
       canceled: false, filePath: session.outputPath, size: metadata.size,
       duration: metadata.duration, videoCodec: metadata.videoCodec,
       audioCodec: metadata.audioCodec, fps: metadata.fps,
-      frameCount: metadata.frameCount, crf: metadata.crf, deterministicFrames: true
+      frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true
     };
   } catch (error) {
     if (error?.code === 'EXPORT_CANCELED' || job.controller.signal.aborted) return { canceled: true };

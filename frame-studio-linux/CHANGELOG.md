@@ -1,3 +1,22 @@
+# FRAME Studio 2.4.17 — Performance & Export
+
+## [IMPROVED]
+- Timeline scrubbing enters a temporary low-resolution preview mode and re-renders the paused frame at full quality after releasing the playhead.
+- Texture caching now has a byte-based memory cap and recency eviction.
+- Turbulent Displace and Crumpled Paper use precomputed noise fields to cut redundant fractal-noise computation.
+- Softened outer glow compositing and expanded glow padding to reduce hard cut-off edges.
+
+## [FIXED]
+- Scene Editor layer imagery now compensates for local texture Y orientation so clips are not rendered upside-down.
+
+## [ADDED]
+- MP4 export settings: 480p through 4K, 24–60 FPS presets, CRF or target bitrate, H.264 encoder speed, and AAC audio bitrate.
+- Quick export profiles for draft, social, high quality, and 4K.
+
+## Notes
+- Electron remains Chromium/V8-based; TypeScript alone does not create a native executable or remove renderer cost.
+- Automated tests pass after implementation; manual Electron GUI and final build validation remain required.
+
 # FRAME Studio Changelog
 
 ## 2.4.16

@@ -39,6 +39,7 @@ async function main() {
     const framePattern = path.join(dir, 'frame-%08d.png');
     const sequenceWithAudioMp4 = path.join(dir, 'sequence-with-audio.mp4');
     const sequenceSilentMp4 = path.join(dir, 'sequence-silent.mp4');
+    const sequenceBitrateMp4 = path.join(dir, 'sequence-bitrate.mp4');
     const sequenceRemapAudioMp4 = path.join(dir, 'sequence-remap-audio.mp4');
     const overlayImage = path.join(dir, 'image-layer.png');
     await run('ffmpeg', [
@@ -130,6 +131,21 @@ async function main() {
     assert.equal(sequenceSilent.crf, 28);
     assert.equal(sequenceSilentProbe.streams.some(stream => stream.codec_type === 'audio'), false, 'a sequência silenciosa não deve conter áudio');
 
+    const sequenceBitrate = await renderFrameSequenceToMp4({
+      framePattern, frameCount: 12, outputPath: sequenceBitrateMp4,
+      expectedDuration: 1.2, fps: 10, rateMode: 'bitrate', videoBitrate: 5,
+      encoderPreset: 'veryfast', audioBitrate: 128,
+      audioClips: [{ kind: 'video', name: 'Bitrate audio', path: withAudio, start: 0, inPoint: 0, outPoint: 1.2, speed: 1, volume: 100 }]
+    });
+    const sequenceBitrateProbe = await probeMedia(sequenceBitrateMp4);
+    assert.equal(sequenceBitrate.videoCodec, 'h264');
+    assert.equal(sequenceBitrate.rateMode, 'bitrate');
+    assert.equal(sequenceBitrate.videoBitrate, 5);
+    assert.equal(sequenceBitrate.encoderPreset, 'veryfast');
+    assert.equal(sequenceBitrate.audioBitrate, 128);
+    assert.equal(sequenceBitrate.audioCodec, 'aac');
+    assert.ok(sequenceBitrateProbe.streams.some(stream => stream.codec_type === 'audio' && stream.codec_name === 'aac'));
+
     await assert.rejects(
       transcodeWebmToMp4({ inputPath: withAudio, outputPath: path.join(dir, 'missing-ffmpeg.mp4'), expectedDuration: 1.2, ffmpegPath: path.join(dir, 'ffmpeg-inexistente') }),
       /FFmpeg was not found.*sudo pacman -S --needed ffmpeg/s
@@ -169,8 +185,8 @@ async function main() {
     );
     assert.equal(await fs.access(canceledSequencePath).then(() => true, () => false), false, 'cancelamento da sequência deve remover o MP4 parcial');
 
-    console.log('FRAME Studio 2.4.16 export integration tests: OK');
-    console.log('Generated and validated with ffprobe: deterministic 10 FPS H.264 + AAC sequence (CRF 23), silent H.264 sequence (CRF 28), reverse/freeze Time Remap audio, and compatibility transcodes.');
+    console.log('FRAME Studio 2.4.17 export integration tests: OK');
+    console.log('Generated and validated with ffprobe: deterministic 10 FPS H.264 + AAC sequence (CRF 23), silent H.264 sequence (CRF 28), target-bitrate sequence, reverse/freeze Time Remap audio, and compatibility transcodes.');
     console.log('Verified: final FPS and duration, audio presence/absence, codecs, progress, missing FFmpeg, corrupt input, and cancellation on both export paths.');
   } finally {
     await fs.rm(dir, { recursive: true, force: true });

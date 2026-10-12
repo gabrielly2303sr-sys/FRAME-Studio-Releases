@@ -9,7 +9,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'release.yml'), 'utf8');
-assert.equal(pkg.version, '2.4.16');
+assert.equal(pkg.version, '2.4.17');
 assert.equal(pkg.devDependencies['electron-builder'], '25.1.8');
 assert.match(html, /id="effectSearch"/);
 assert.match(html, /data-effect-mode="favorites"/);
@@ -41,4 +41,4 @@ const sceneOrigin = sceneApi.sceneProjectPoint({ x: 0, y: 0, z: 0 }, sceneBasis)
 const sceneAbove = sceneApi.sceneProjectPoint({ x: 0, y: 100, z: 0 }, sceneBasis);
 assert.ok(sceneAbove.y < sceneOrigin.y, 'world +Y should project upward on screen');
 
-console.log('FRAME Studio 2.4.16 advanced-effects checks: OK');
+console.log('FRAME Studio 2.4.17 advanced-effects checks: OK');

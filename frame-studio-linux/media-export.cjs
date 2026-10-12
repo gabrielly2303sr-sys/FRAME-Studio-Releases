@@ -393,6 +393,10 @@ async function renderFrameSequenceToMp4(options = {}) {
     expectedDuration = 0,
     fps = 30,
     crf = 18,
+    rateMode = 'crf',
+    videoBitrate = 12,
+    encoderPreset = 'medium',
+    audioBitrate = 192,
     audioClips = [],
     signal,
     onProgress,
@@ -402,7 +406,11 @@ async function renderFrameSequenceToMp4(options = {}) {
   } = options;
   if (!framePattern || !outputPath) throw new Error('A frame sequence and MP4 output path are required.');
   const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));
-  const safeCrf = Math.max(18, Math.min(28, Math.round(Number(crf) || 18)));
+  const safeCrf = Math.max(16, Math.min(28, Math.round(Number(crf) || 18)));
+  const safeRateMode = rateMode === 'bitrate' ? 'bitrate' : 'crf';
+  const safeVideoBitrate = Math.max(2, Math.min(100, Number(videoBitrate) || 12));
+  const safeEncoderPreset = ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(encoderPreset) ? encoderPreset : 'medium';
+  const safeAudioBitrate = [96, 128, 160, 192, 256, 320].includes(Number(audioBitrate)) ? Number(audioBitrate) : 192;
   const safeFrameCount = Math.floor(Number(frameCount));
   if (!Number.isSafeInteger(safeFrameCount) || safeFrameCount < 1 || safeFrameCount > safeFps * 60 * 60 * 12) {
     throw new Error('Invalid frame count or video duration exceeds 12 hours.');
@@ -518,10 +526,15 @@ async function renderFrameSequenceToMp4(options = {}) {
     '-frames:v', String(safeFrameCount),
     '-t', duration.toFixed(6),
     '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', String(safeCrf),
-    '-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p'
+    '-c:v', 'libx264', '-preset', safeEncoderPreset
   );
-  if (hasAudio) args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2');
+  if (safeRateMode === 'bitrate') {
+    args.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
+  } else {
+    args.push('-crf', String(safeCrf));
+  }
+  args.push('-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p');
+  if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2');
   args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
 
   try {
@@ -565,6 +578,10 @@ async function renderFrameSequenceToMp4(options = {}) {
       height: outputVideo.height,
       fps: actualFps,
       crf: safeCrf,
+      rateMode: safeRateMode,
+      videoBitrate: safeVideoBitrate,
+      encoderPreset: safeEncoderPreset,
+      audioBitrate: safeAudioBitrate,
       frameCount: Number.isFinite(reportedFrameCount) && reportedFrameCount > 0 ? reportedFrameCount : safeFrameCount,
       deterministicFrames: true,
       inputAudioClips: audioLabels.length
