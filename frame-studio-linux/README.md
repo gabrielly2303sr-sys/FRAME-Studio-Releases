@@ -1,4 +1,4 @@
-# FRAME Studio 2.4.22 — Packaged Media Tools Reliability
+# FRAME Studio 2.4.23 — Bundled Media Tools Verification Fix
 
 This release fixes the repeat “missing bundled media tools” issue in Linux AppImages. The Linux package now bundles the standalone `yt-dlp_linux` ELF executable rather than the Python zipapp, and the runtime can repair missing executable permissions by copying the already bundled binary into FRAME's app-owned cache. No `pacman`, Python package, or system-level FFmpeg/yt-dlp install is intended for the official package.
 

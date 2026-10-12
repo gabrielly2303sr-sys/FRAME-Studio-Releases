@@ -1,17 +1,14 @@
-# FRAME Studio 2.4.22 — Packaged Media Tools Fix
+# FRAME Studio 2.4.23 — Bundled Media Tools Verification Fix
 
-This corrective source kit addresses the recurring “official package is missing its bundled media tools” message reported from published AppImages.
+The 2.4.22 AppImage found yt-dlp, FFmpeg and ffprobe inside its mounted resources but still reported "Bundled media tools could not start".
 
-### Why 2.4.21 was insufficient
-- The Linux URL used the `yt-dlp` Python zipapp, which can fail on machines without a compatible Python runtime even though the file exists.
-- CI verified the intermediate `linux-unpacked/resources/downloader` folder, but did not inspect and execute tools inside the final generated AppImage.
-- The runtime showed only a generic error, hiding whether the file was absent or failed to execute.
+### Root cause
+`videoDownloaderToolsStatus()` in `main.cjs` ran every tool with `--version`. FFmpeg and ffprobe use `-version`; with `--version` they print their banner and exit nonzero, so the check marked working binaries as failed. `media-export.cjs` already used `-version`, so the two checks disagreed.
 
-### 2.4.22 fixes
-- Linux CI and local preparation download the standalone `yt-dlp_linux` ELF asset.
-- Runtime lookup searches supported Electron resource layouts.
-- If a bundled Linux executable is present but loses its executable bit, FRAME copies that already-bundled file into its own user-data `runtime-tools` directory, sets the executable bit, and runs that copy. No system package manager is required.
-- The Downloader panel surfaces actual tool path/reason diagnostics.
-- GitHub Actions extracts the final AppImage, verifies the three tools exist and are executable inside it, and runs `--version` checks before uploading release artifacts.
+### 2.4.23 fixes
+- New shared helper `media-tools.cjs`: one definition of per-tool version arguments (yt-dlp `--version`, ffmpeg/ffprobe `-version`), packaged path resolution and failure classification.
+- `main.cjs`, `media-export.cjs` and `scripts/prepare-bundled-tools.cjs` use it.
+- `scripts/verify-bundled-tools.cjs` runs the real executables; the release workflow runs it on the unpacked app, the final AppImage, DEB, RPM and the installed Windows app.
+- Regression tests: `tests/2.4.23-media-tool-validation.test.js`.
 
-The source ZIP has no native binaries; the release workflow fetches the platform artifacts and packs them into official installers/AppImages. Do not distribute a release until all build/publish jobs pass and the published AppImage has the expected version.
+The source ZIP has no native binaries; the release workflow fetches platform artifacts and packs them. A packaged AppImage/Windows installer has NOT been built or executed in the environment that prepared this kit; do not publish until the release workflow passes and the final packages are checked with the checklist in RELEASE-VERIFICATION-2.4.23.md.

@@ -3,6 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { checkToolVersion } = require('./media-tools.cjs');
 
 class ExportCanceledError extends Error {
   constructor() {
@@ -195,14 +196,14 @@ function validateProbe(probe, expectedDuration, label, options = {}) {
 async function checkMediaTools(options = {}) {
   const ffmpegPath = resolveToolPath('ffmpeg', options.ffmpegPath);
   const ffprobePath = resolveToolPath('ffprobe', options.ffprobePath);
+  // Version arguments come from the shared helper (ffmpeg/ffprobe: -version), so export checks and the
+  // downloader status check can never disagree about how to validate a tool.
+  const runner = options.runner;
   const check = async (binary, kind) => {
-    try {
-      const result = await runProcess(binary, ['-version'], { kind });
-      const firstLine = `${result.stdout}\n${result.stderr}`.split(/\r?\n/).find(line => line.trim()) || `${kind} available`;
-      return { available: true, version: firstLine.trim() };
-    } catch (error) {
-      return { available: false, error: error?.message || String(error) };
-    }
+    const result = await checkToolVersion(kind, binary, runner ? { runner } : {});
+    return result.available
+      ? { available: true, version: result.version || `${kind} available`, kind: '', stdout: result.stdout, stderr: result.stderr }
+      : { available: false, error: `${result.kind}: ${result.reason}`, kind: result.kind, stdout: result.stdout, stderr: result.stderr };
   };
   const [ffmpeg, ffprobe] = await Promise.all([check(ffmpegPath, 'ffmpeg'), check(ffprobePath, 'ffprobe')]);
   const missing = [];

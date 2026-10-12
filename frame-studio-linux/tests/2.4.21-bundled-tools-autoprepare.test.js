@@ -8,10 +8,11 @@ const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const mediaExport = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const install = fs.readFileSync(path.join(root, 'install-linux.sh'), 'utf8');
+const mediaToolsSrc = fs.readFileSync(path.join(root, 'media-tools.cjs'), 'utf8');
 const bootstrap = fs.readFileSync(path.join(root, 'scripts', 'prepare-bundled-tools.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'release.yml'), 'utf8');
 
-assert.equal(pkg.version, '2.4.22');
+assert.equal(pkg.version, '2.4.23');
 assert.equal(pkg.scripts['prestart'], 'node scripts/prepare-bundled-tools.cjs --quiet --allow-missing');
 for (const lifecycle of ['prebuild', 'prebuild:win', 'prebuild:win:installer', 'prebuild:win:portable', 'prebuild:linux', 'prebuild:linux:appimage']) {
   assert.match(pkg.scripts[lifecycle] || '', /prepare-bundled-tools\.cjs/, `${lifecycle} should provision the native tools`);
@@ -21,7 +22,7 @@ assert.match(bootstrap, /function isStandaloneLinuxYtDlp\(/);
 assert.match(bootstrap, /0x7f.*0x45.*0x4c.*0x46/);
 assert.match(bootstrap, /ffmpeg-release-amd64-static\.tar\.xz/);
 assert.match(bootstrap, /ffmpeg-release-essentials\.zip/);
-assert.match(bootstrap, /--version/);
+assert.match(bootstrap, /versionArgsFor/);
 assert.match(bootstrap, /FRAME tools/);
 assert.match(main, /function bundledToolPath\(/);
 assert.match(main, /function makeRunnableBundledTool\(/);
@@ -29,7 +30,8 @@ assert.match(main, /runtime-tools/);
 assert.match(main, /ytDlpReason/);
 assert.match(main, /ffprobeReason/);
 assert.match(main, /Could not prepare bundled tool/);
-assert.match(main, /process\.resourcesPath, 'downloader', filename/);
+assert.match(mediaToolsSrc, /pathApi\.join\(resourcesPath, 'downloader', filename\)/);
+assert.match(main, /resourcesPath: process\.resourcesPath/);
 assert.match(main, /return app\.isPackaged \? null : toolFilename\(tool\)/);
 assert.match(main, /packaged: app\.isPackaged/);
 assert.match(main, /users should not need to install separate media tools/);
@@ -44,4 +46,4 @@ assert.match(workflow, /Verify bundled tools are inside the Windows app resource
 assert.match(workflow, /Verify bundled tools are inside the Linux app resources/);
 assert.match(workflow, /Verify tools inside the final AppImage/);
 assert.match(workflow, /yt-dlp_linux/);
-console.log('FRAME Studio 2.4.22 packaged media-tool reliability checks: OK');
+console.log('FRAME Studio 2.4.23 packaged media-tool reliability checks: OK');

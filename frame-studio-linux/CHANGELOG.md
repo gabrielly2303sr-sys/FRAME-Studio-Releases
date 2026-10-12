@@ -1,3 +1,16 @@
+## 2.4.23
+### [FIXED]
+- The bundled media tools check no longer reports FFmpeg and ffprobe as failed when they are present and working. `videoDownloaderToolsStatus()` passed `--version` to every executable; FFmpeg and ffprobe require `-version` (FFmpeg 7 prints its banner for `--version` but exits nonzero). Each tool is now checked with its own argument: yt-dlp `--version`, FFmpeg `-version`, ffprobe `-version`.
+- A tool is available only when its correct version command exits with status 0; stdout/stderr are preserved for diagnostics and stderr text alone never turns a successful exit into a failure.
+- Packaged apps ignore `FRAME_FFMPEG_PATH`/`FRAME_FFPROBE_PATH` overrides, so the downloader, export and status check always use the same validated bundled executables.
+### [IMPROVED]
+- New shared helper `media-tools.cjs` is the single definition of version arguments, packaged path candidates and failure classification, used by the downloader status, export checks, the prepare script and the release verification script.
+- Diagnostics distinguish: missing file, permission denied, incompatible executable, missing runtime library, invalid arguments, timeout, and a genuine nonzero exit.
+- Release workflow runs the real bundled executables (correct per-tool arguments, exit codes enforced) inside the final Windows installer, AppImage, DEB and RPM before anything is published. Previously the Windows steps ignored native exit codes.
+### [ADDED]
+- `scripts/verify-bundled-tools.cjs` smoke test and `npm run verify:tools:linux` / `verify:tools:win`.
+- Regression tests in `tests/2.4.23-media-tool-validation.test.js`.
+
 ## 2.4.22
 ### [FIXED]
 - Linux now bundles standalone `yt-dlp_linux`, avoiding a hidden dependency on system Python.

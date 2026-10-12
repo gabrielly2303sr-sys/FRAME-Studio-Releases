@@ -9,6 +9,7 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
+const { versionArgsFor } = require('../media-tools.cjs');
 
 const root = path.resolve(__dirname, '..');
 const quiet = process.argv.includes('--quiet');
@@ -42,8 +43,9 @@ async function fetchToFile(url, destination) {
   const stat = await fsp.stat(destination);
   if (stat.size < 1000) throw new Error(`Downloaded file is unexpectedly small: ${destination}`);
 }
-function toolWorks(file, args) {
-  try { run(file, args); return true; } catch { return false; }
+function toolWorks(file, tool) {
+  // Tool-specific version arguments come from media-tools.cjs (yt-dlp: --version, ffmpeg/ffprobe: -version).
+  try { run(file, versionArgsFor(tool)); return true; } catch { return false; }
 }
 function isStandaloneLinuxYtDlp(file) {
   // The `yt-dlp` release asset is a Python zipapp and still requires Python on the
@@ -61,9 +63,9 @@ function allToolsReady() {
   const ytPath = path.join(vendor, names.yt);
   return fs.existsSync(vendor)
     && isStandaloneLinuxYtDlp(ytPath)
-    && toolWorks(ytPath, ['--version'])
-    && toolWorks(path.join(vendor, names.ffmpeg), ['-version'])
-    && toolWorks(path.join(vendor, names.ffprobe), ['-version']);
+    && toolWorks(ytPath, 'yt-dlp')
+    && toolWorks(path.join(vendor, names.ffmpeg), 'ffmpeg')
+    && toolWorks(path.join(vendor, names.ffprobe), 'ffprobe');
 }
 async function copyLicenseFilesRecursively(source, destination) {
   let entries = [];
@@ -91,8 +93,8 @@ async function prepareWindows() {
   if (arch !== 'x64') throw new Error(`Bundled Windows tools are currently provided for x64, not ${arch}.`);
   await fsp.mkdir(vendor, { recursive: true });
   const ytPath = path.join(vendor, names.yt);
-  if (!toolWorks(ytPath, ['--version'])) await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', ytPath);
-  if (!toolWorks(path.join(vendor, names.ffmpeg), ['-version']) || !toolWorks(path.join(vendor, names.ffprobe), ['-version'])) {
+  if (!toolWorks(ytPath, 'yt-dlp')) await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', ytPath);
+  if (!toolWorks(path.join(vendor, names.ffmpeg), 'ffmpeg') || !toolWorks(path.join(vendor, names.ffprobe), 'ffprobe')) {
     const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'frame-ffmpeg-win-'));
     try {
       const archive = path.join(temp, 'ffmpeg-release-essentials.zip');
@@ -133,12 +135,12 @@ async function prepareLinux() {
   if (arch !== 'x64') throw new Error(`Bundled Linux tools are currently provided for x64, not ${arch}.`);
   await fsp.mkdir(vendor, { recursive: true });
   const ytPath = path.join(vendor, names.yt);
-  if (!isStandaloneLinuxYtDlp(ytPath) || !toolWorks(ytPath, ['--version'])) {
+  if (!isStandaloneLinuxYtDlp(ytPath) || !toolWorks(ytPath, 'yt-dlp')) {
     await fsp.rm(ytPath, { force: true });
     await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux', ytPath);
     await fsp.chmod(ytPath, 0o755);
   }
-  if (!toolWorks(path.join(vendor, names.ffmpeg), ['-version']) || !toolWorks(path.join(vendor, names.ffprobe), ['-version'])) {
+  if (!toolWorks(path.join(vendor, names.ffmpeg), 'ffmpeg') || !toolWorks(path.join(vendor, names.ffprobe), 'ffprobe')) {
     const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'frame-ffmpeg-linux-'));
     try {
       const archive = path.join(temp, 'ffmpeg-release-amd64-static.tar.xz');

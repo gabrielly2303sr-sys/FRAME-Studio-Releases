@@ -8,7 +8,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.22');
+assert.equal(pkg.version, '2.4.23');
 
 assert.match(html, /function scheduleScrubPreviewDraw\(/, 'scrub redraw is coalesced per animation frame');
 assert.match(html, /function rememberVideoPreviewFrame\(/, 'a decoded video frame is kept for seek gaps');
@@ -58,4 +58,4 @@ context.seekVideoPreviewTo(afterDrag, 4.5);
 assert.equal(assigned, 4.5, 'final/non-drag seek should request the accurate currentTime target');
 assert.equal(afterDrag.__framePendingSeek, 4.5);
 
-console.log('FRAME Studio 2.4.22 live preview/downloader checks: OK');
+console.log('FRAME Studio 2.4.23 live preview/downloader checks: OK');

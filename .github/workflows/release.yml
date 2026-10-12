@@ -48,8 +48,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $ffmpegLicenses | Out-Null
           Get-ChildItem $unpack -Recurse -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|GPL|LGPL|README|AUTHORS|NOTICE)' } | Copy-Item -Destination $ffmpegLicenses -Force
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -OutFile (Join-Path $licenses "yt-dlp-LICENSE.txt")
-          & (Join-Path $vendor "yt-dlp.exe") --version
-          & (Join-Path $vendor "ffmpeg.exe") -version | Select-Object -First 1
+      - name: Verify downloaded Windows tools run with their correct arguments
+        working-directory: frame-studio-linux
+        shell: pwsh
+        run: node scripts/verify-bundled-tools.cjs vendor/win --platform win32
+      - name: Run media tool validation regression tests
+        working-directory: frame-studio-linux
+        shell: pwsh
+        run: node tests/2.4.23-media-tool-validation.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -65,8 +71,28 @@ jobs:
             $toolPath = Join-Path $toolDir $tool
             if (!(Test-Path $toolPath)) { throw "Bundled tool missing from app resources: $toolPath" }
           }
-          & (Join-Path $toolDir "yt-dlp.exe") --version
-          & (Join-Path $toolDir "ffmpeg.exe") -version | Select-Object -First 1
+          # Required FFmpeg runtime DLLs (if the build ships shared libraries) must travel with the executables.
+          Get-ChildItem (Join-Path $PWD "vendor\win") -Filter "*.dll" -File | ForEach-Object {
+            if (!(Test-Path (Join-Path $toolDir $_.Name))) { throw "Runtime DLL missing from app resources: $($_.Name)" }
+          }
+          # Runs each real executable with its own version argument; exits nonzero on any failure.
+          node scripts/verify-bundled-tools.cjs $toolDir --platform win32
+          if ($LASTEXITCODE -ne 0) { throw "Bundled tool verification failed in win-unpacked." }
+      - name: Verify tools inside the final Windows installer
+        shell: pwsh
+        working-directory: frame-studio-linux
+        run: |
+          $installer = Get-ChildItem "dist" -Filter "*-Setup-x64.exe" | Select-Object -First 1
+          if (!$installer) { throw "Windows NSIS installer was not generated." }
+          $installDir = Join-Path $env:RUNNER_TEMP "frame-installed"
+          if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
+          # NSIS silent install: /S, and /D= must be the last argument with no quotes.
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Silent install failed with exit code $($process.ExitCode)." }
+          $toolDir = Join-Path $installDir "resources\downloader"
+          if (!(Test-Path $toolDir)) { throw "Installed app has no resources\downloader directory: $toolDir" }
+          node scripts/verify-bundled-tools.cjs $toolDir --platform win32
+          if ($LASTEXITCODE -ne 0) { throw "Bundled tool verification failed in the installed Windows app." }
       - name: Verify update metadata
         shell: pwsh
         working-directory: frame-studio-linux
@@ -118,8 +144,12 @@ jobs:
           mkdir -p "$vendor/licenses/ffmpeg"
           find "$tmp" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'GPL*' -o -iname 'LGPL*' -o -iname 'README*' -o -iname 'AUTHORS*' -o -iname 'NOTICE*' \) -exec cp -f {} "$vendor/licenses/ffmpeg/" \; || true
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"
-          "$vendor/yt-dlp" --version
-          "$vendor/ffmpeg" -version | head -n 1
+      - name: Verify downloaded Linux tools run with their correct arguments
+        working-directory: frame-studio-linux
+        run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux
+      - name: Run media tool validation regression tests
+        working-directory: frame-studio-linux
+        run: node tests/2.4.23-media-tool-validation.test.js
       - name: Install dependencies
         working-directory: frame-studio-linux
         run: npm install --no-audit --no-fund
@@ -135,8 +165,9 @@ jobs:
           for tool in yt-dlp ffmpeg ffprobe; do
             test -x "$tool_dir/$tool" || { echo "Bundled tool missing or not executable: $tool_dir/$tool"; exit 1; }
           done
-          "$tool_dir/yt-dlp" --version
-          "$tool_dir/ffmpeg" -version | head -n 1
+          # yt-dlp must be the standalone ELF build (no system Python); each tool runs with its own version flag.
+          head -c 4 "$tool_dir/yt-dlp" | od -An -tx1 | grep -q '7f 45 4c 46' || { echo "yt-dlp is not a standalone ELF executable."; exit 1; }
+          node scripts/verify-bundled-tools.cjs "$tool_dir" --platform linux
       - name: Verify tools inside the final AppImage
         working-directory: frame-studio-linux
         shell: bash
@@ -155,9 +186,33 @@ jobs:
           for tool in yt-dlp ffmpeg ffprobe; do
             test -x "$tool_dir/$tool" || { echo "Tool is missing or not executable inside AppImage: $tool"; exit 1; }
           done
-          "$tool_dir/yt-dlp" --version
-          "$tool_dir/ffmpeg" -version | head -n 1
-          "$tool_dir/ffprobe" -version | head -n 1
+          node scripts/verify-bundled-tools.cjs "$tool_dir" --platform linux
+      - name: Verify tools inside the final DEB package
+        working-directory: frame-studio-linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find "$PWD/dist" -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "$deb" || { echo "DEB output was not generated."; exit 1; }
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          dpkg-deb -x "$deb" "$extract_dir"
+          tool_dir="$(dirname "$(find "$extract_dir" -type f -path '*/resources/downloader/yt-dlp' -print -quit)")"
+          test -d "$tool_dir" || { echo "Bundled tools are missing from the DEB."; exit 1; }
+          node scripts/verify-bundled-tools.cjs "$tool_dir" --platform linux
+      - name: Verify tools inside the final RPM package
+        working-directory: frame-studio-linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          rpm_file="$(find "$PWD/dist" -maxdepth 1 -type f -name '*.rpm' -print -quit)"
+          test -n "$rpm_file" || { echo "RPM output was not generated."; exit 1; }
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          (cd "$extract_dir" && rpm2cpio "$rpm_file" | cpio -idm --quiet)
+          tool_dir="$(dirname "$(find "$extract_dir" -type f -path '*/resources/downloader/yt-dlp' -print -quit)")"
+          test -d "$tool_dir" || { echo "Bundled tools are missing from the RPM."; exit 1; }
+          node scripts/verify-bundled-tools.cjs "$tool_dir" --platform linux
       - name: Verify AppImage update metadata
         working-directory: frame-studio-linux
         run: test -s dist/latest-linux.yml

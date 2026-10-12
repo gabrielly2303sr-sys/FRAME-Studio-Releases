@@ -6,6 +6,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
+const mediaTools = require('./media-tools.cjs');
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -163,8 +164,7 @@ function setupAutomaticUpdates() {
 }
 
 function toolFilename(tool) {
-  const suffix = process.platform === 'win32' ? '.exe' : '';
-  return `${tool}${suffix}`;
+  return mediaTools.toolFilename(tool);
 }
 
 const bundledToolPathCache = new Map();
@@ -200,16 +200,15 @@ function makeRunnableBundledTool(candidate, tool) {
 
 function bundledToolPath(tool) {
   if (bundledToolPathCache.has(tool)) return bundledToolPathCache.get(tool);
-  const filename = toolFilename(tool);
-  const platformFolder = process.platform === 'win32' ? 'win' : process.platform === 'linux' ? 'linux' : process.platform;
-  const candidates = [];
-  if (app.isPackaged && process.resourcesPath) {
-    candidates.push(path.join(process.resourcesPath, 'downloader', filename));
-    try { candidates.push(path.join(path.dirname(app.getAppPath()), 'downloader', filename)); } catch {}
-    try { candidates.push(path.join(path.dirname(app.getAppPath()), 'app.asar.unpacked', 'downloader', filename)); } catch {}
-  } else {
-    candidates.push(path.join(__dirname, 'vendor', platformFolder, filename));
-  }
+  let appPath = '';
+  try { appPath = app.getAppPath(); } catch {}
+  const candidates = mediaTools.bundledToolCandidates(tool, {
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath || '',
+    appPath,
+    sourceRoot: __dirname
+  });
   for (const candidate of [...new Set(candidates)]) {
     try {
       if (!fsSync.statSync(candidate).isFile()) continue;
@@ -235,7 +234,8 @@ function downloaderToolCommand(tool) {
 
 function mediaToolCommand(tool) {
   const envName = tool === 'ffprobe' ? 'FRAME_FFPROBE_PATH' : 'FRAME_FFMPEG_PATH';
-  if (process.env[envName]) return process.env[envName];
+  // Packaged builds always use the validated bundled copy; env overrides are for source runs only.
+  if (!app.isPackaged && process.env[envName]) return process.env[envName];
   const bundled = bundledToolPath(tool);
   if (bundled) return bundled;
   return app.isPackaged ? null : toolFilename(tool);
@@ -251,22 +251,29 @@ function configureBundledMediaTools() {
   process.env.FRAME_PACKAGED_APP = app.isPackaged ? '1' : '0';
   const ffmpeg = bundledToolPath('ffmpeg');
   const ffprobe = bundledToolPath('ffprobe');
-  if (ffmpeg && !process.env.FRAME_FFMPEG_PATH) process.env.FRAME_FFMPEG_PATH = ffmpeg;
-  if (ffprobe && !process.env.FRAME_FFPROBE_PATH) process.env.FRAME_FFPROBE_PATH = ffprobe;
+  // Export code (media-export.cjs) must receive exactly the same paths that the status check validates.
+  if (ffmpeg && (app.isPackaged || !process.env.FRAME_FFMPEG_PATH)) process.env.FRAME_FFMPEG_PATH = ffmpeg;
+  if (ffprobe && (app.isPackaged || !process.env.FRAME_FFPROBE_PATH)) process.env.FRAME_FFPROBE_PATH = ffprobe;
 }
 
 async function videoDownloaderToolsStatus() {
   const check = async (tool) => {
     const bundledPath = bundledToolPath(tool);
     const command = bundledPath || (app.isPackaged ? null : toolFilename(tool));
-    if (!command) return { available: false, version: '', source: 'missing', path: '', reason: 'not found under application resources/downloader or runnable app-data cache' };
-    try {
-      const result = await execFileAsync(command, ['--version'], { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, windowsHide: true });
-      const output = `${result.stdout || ''}\n${result.stderr || ''}`;
-      return { available: true, version: output.split(/\r?\n/).map(line => line.trim()).find(Boolean) || '', source: bundledPath ? (bundledPath.includes(`${path.sep}runtime-tools${path.sep}`) ? 'bundled-cache' : 'bundled') : 'system', path: command, reason: '' };
-    } catch (error) {
-      return { available: false, version: '', source: 'missing', path: command, reason: error?.code === 'ENOENT' ? 'executable or required runtime dependency not found' : String(error?.message || error).slice(0, 400) };
-    }
+    if (!command) return { available: false, version: '', source: 'missing', path: '', kind: 'missing-file', reason: 'not found under application resources/downloader or runnable app-data cache' };
+    // Tool-specific arguments (yt-dlp: --version, ffmpeg/ffprobe: -version) live in media-tools.cjs.
+    const result = await mediaTools.checkToolVersion(tool, command, {
+      fileExists: file => { try { return fsSync.statSync(file).isFile(); } catch { return false; } }
+    });
+    if (!result.available) console.warn(`[FRAME media tools] ${tool} check failed (${result.kind}) via ${command} ${result.args.join(' ')}: ${result.reason}`);
+    return {
+      available: result.available,
+      version: result.version,
+      source: result.available ? (bundledPath ? (bundledPath.includes(`${path.sep}runtime-tools${path.sep}`) ? 'bundled-cache' : 'bundled') : 'system') : 'missing',
+      path: command,
+      kind: result.kind,
+      reason: result.reason ? `${result.kind}: ${result.reason}` : ''
+    };
   };
   const [ytDlp, ffmpeg, ffprobe] = await Promise.all([check('yt-dlp'), check('ffmpeg'), check('ffprobe')]);
   return {
@@ -275,15 +282,18 @@ async function videoDownloaderToolsStatus() {
     ytDlpSource: ytDlp.source,
     ytDlpPath: ytDlp.path,
     ytDlpReason: ytDlp.reason,
+    ytDlpKind: ytDlp.kind,
     ffmpeg: ffmpeg.available,
     ffmpegVersion: ffmpeg.version,
     ffmpegSource: ffmpeg.source,
     ffmpegPath: ffmpeg.path,
     ffmpegReason: ffmpeg.reason,
+    ffmpegKind: ffmpeg.kind,
     ffprobe: ffprobe.available,
     ffprobeVersion: ffprobe.version,
     ffprobePath: ffprobe.path,
     ffprobeReason: ffprobe.reason,
+    ffprobeKind: ffprobe.kind,
     bundled: ['bundled', 'bundled-cache'].includes(ytDlp.source) && ['bundled', 'bundled-cache'].includes(ffmpeg.source) && ['bundled', 'bundled-cache'].includes(ffprobe.source),
     packaged: app.isPackaged,
     platform: process.platform
