@@ -3,6 +3,12 @@ name: Build and publish FRAME Studio
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to build/update, for example v2.4.30"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,16 +19,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Verify release tag matches package version
         working-directory: frame-studio-linux
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         run: |
           $tagVersion = $env:RELEASE_TAG.TrimStart('v')
           $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
@@ -48,6 +54,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $ffmpegLicenses | Out-Null
           Get-ChildItem $unpack -Recurse -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|GPL|LGPL|README|AUTHORS|NOTICE)' } | Copy-Item -Destination $ffmpegLicenses -Force
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -OutFile (Join-Path $licenses "yt-dlp-LICENSE.txt")
+          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $PWD "vendor\win")
       - name: Verify downloaded Windows tools run with their correct arguments
         working-directory: frame-studio-linux
         shell: pwsh
@@ -117,16 +125,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Verify release tag matches package version
         working-directory: frame-studio-linux
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         run: |
           set -euo pipefail
           tag_version="${RELEASE_TAG#v}"
@@ -160,6 +168,8 @@ jobs:
           mkdir -p "$vendor/licenses/ffmpeg"
           find "$tmp" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'GPL*' -o -iname 'LGPL*' -o -iname 'README*' -o -iname 'AUTHORS*' -o -iname 'NOTICE*' \) -exec cp -f {} "$vendor/licenses/ffmpeg/" \; || true
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"
+          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.
+          echo "$vendor" >> "$GITHUB_PATH"
       - name: Verify downloaded Linux tools run with their correct arguments
         working-directory: frame-studio-linux
         run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux
@@ -264,7 +274,7 @@ jobs:
       - name: Upload installers and updater metadata to this release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
