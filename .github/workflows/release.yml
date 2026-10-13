@@ -3,12 +3,6 @@ name: Build and publish FRAME Studio
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Existing release tag to build/update, for example v2.4.30"
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -19,16 +13,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out release source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Verify release tag matches package version
         working-directory: frame-studio-linux
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           $tagVersion = $env:RELEASE_TAG.TrimStart('v')
           $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
@@ -54,8 +48,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $ffmpegLicenses | Out-Null
           Get-ChildItem $unpack -Recurse -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|GPL|LGPL|README|AUTHORS|NOTICE)' } | Copy-Item -Destination $ffmpegLicenses -Force
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -OutFile (Join-Path $licenses "yt-dlp-LICENSE.txt")
-          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.
-          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $PWD "vendor\win")
       - name: Verify downloaded Windows tools run with their correct arguments
         working-directory: frame-studio-linux
         shell: pwsh
@@ -69,15 +61,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run FRAME Studio regression suite
         working-directory: frame-studio-linux
-        shell: pwsh
-        run: |
-          # Set PATH in this exact step as well as GITHUB_PATH so the integration
-          # test can resolve ffmpeg/ffprobe even if runner path propagation varies.
-          $vendor = Join-Path $PWD "vendor\win"
-          $env:PATH = "$vendor;$env:PATH"
-          if (!(Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "FFmpeg is missing from PATH: $vendor" }
-          if (!(Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "FFprobe is missing from PATH: $vendor" }
-          npm test
+        run: npm test
       - name: Build auto-updatable NSIS installer
         working-directory: frame-studio-linux
         run: npm run build:win:installer
@@ -119,7 +103,7 @@ jobs:
           if (!(Test-Path "dist/latest.yml")) { throw "dist/latest.yml was not generated. Check the electron-builder publish configuration." }
           if (!(Get-ChildItem "dist" -Filter "*-Setup-x64.exe" | Select-Object -First 1)) { throw "Windows NSIS installer was not generated." }
       - name: Upload Windows release files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: windows-update-assets
           if-no-files-found: error
@@ -133,21 +117,20 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out release source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Verify release tag matches package version
         working-directory: frame-studio-linux
-        shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        shell: bash
         run: |
-          set -euo pipefail
           tag_version="${RELEASE_TAG#v}"
           package_version="$(node -p "require('./package.json').version")"
-          if [ "$tag_version" != "$package_version" ]; then
+          if [[ "$tag_version" != "$package_version" ]]; then
             echo "Release tag $RELEASE_TAG does not match package version $package_version." >&2
             exit 1
           fi
@@ -162,45 +145,20 @@ jobs:
           set -euo pipefail
           vendor="$PWD/vendor/linux"
           mkdir -p "$vendor"
-          curl -fsSL --retry 3 --connect-timeout 20 --max-time 180 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" -o "$vendor/yt-dlp"
+          curl -fsSL --retry 3 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" -o "$vendor/yt-dlp"
           chmod 0755 "$vendor/yt-dlp"
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          archive="$tmp/ffmpeg.tar.xz"
-          download_ok=false
-          # The John Van Sickle endpoint has occasionally returned non-archive content.
-          # Prefer the rolling static GPL build on GitHub and validate it before extracting.
-          for url in \
-            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
-            "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"; do
-            rm -f "$archive"
-            if curl -fSL --retry 2 --connect-timeout 20 --max-time 180 "$url" -o "$archive"; then
-              if xz -t "$archive" >/dev/null 2>&1 && tar -tJf "$archive" >/dev/null 2>&1; then
-                echo "Validated FFmpeg archive from $url"
-                download_ok=true
-                break
-              fi
-              echo "::warning:: Download from $url was not a valid XZ archive; trying fallback." >&2
-            else
-              echo "::warning:: Download from $url failed; trying fallback." >&2
-            fi
-          done
-          if [ "$download_ok" != true ]; then
-            echo "Could not download a valid FFmpeg XZ archive from either source." >&2
-            if command -v file >/dev/null 2>&1; then file "$archive" >&2 || true; fi
-            exit 1
-          fi
-          tar -xJf "$archive" -C "$tmp"
-          ffmpeg_path="$(find "$tmp" -type f -name ffmpeg -print -quit)"
-          ffprobe_path="$(find "$tmp" -type f -name ffprobe -print -quit)"
-          test -n "$ffmpeg_path" && test -n "$ffprobe_path" || { echo "FFmpeg archive did not contain ffmpeg and ffprobe." >&2; exit 1; }
+          curl -fsSL --retry 3 "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o "$tmp/ffmpeg.tar.xz"
+          tar -xJf "$tmp/ffmpeg.tar.xz" -C "$tmp"
+          ffmpeg_path="$(find "$tmp" -type f -name ffmpeg | head -n 1)"
+          ffprobe_path="$(find "$tmp" -type f -name ffprobe | head -n 1)"
+          test -n "$ffmpeg_path" && test -n "$ffprobe_path"
           install -m 0755 "$ffmpeg_path" "$vendor/ffmpeg"
           install -m 0755 "$ffprobe_path" "$vendor/ffprobe"
           mkdir -p "$vendor/licenses/ffmpeg"
           find "$tmp" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'GPL*' -o -iname 'LGPL*' -o -iname 'README*' -o -iname 'AUTHORS*' -o -iname 'NOTICE*' \) -exec cp -f {} "$vendor/licenses/ffmpeg/" \; || true
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"
-          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.
-          echo "$vendor" >> "$GITHUB_PATH"
       - name: Verify downloaded Linux tools run with their correct arguments
         working-directory: frame-studio-linux
         run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux
@@ -212,15 +170,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run FRAME Studio regression suite
         working-directory: frame-studio-linux
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Set PATH in this exact step as well as GITHUB_PATH to make the test
-          # binaries explicitly discoverable by child_process.spawn.
-          export PATH="$PWD/vendor/linux:$PATH"
-          command -v ffmpeg
-          command -v ffprobe
-          npm test
+        run: npm test
       - name: Build Linux packages
         working-directory: frame-studio-linux
         run: npm run build:linux
@@ -285,7 +235,7 @@ jobs:
         working-directory: frame-studio-linux
         run: test -s dist/latest-linux.yml
       - name: Upload Linux release files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: linux-update-assets
           if-no-files-found: error
@@ -301,19 +251,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Windows assets
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: windows-update-assets
           path: release-assets/windows
       - name: Download Linux assets
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: linux-update-assets
           path: release-assets/linux
       - name: Upload installers and updater metadata to this release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}
+          tag_name: ${{ github.event.release.tag_name }}
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |

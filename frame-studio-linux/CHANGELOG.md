@@ -1,41 +1,28 @@
-# FRAME Studio Changelog
-
-## 2.4.30 — GPU export, responsive playhead and persistent groups
-
-### [IMPROVED]
-- MP4 export now detects supported FFmpeg hardware encoders and prefers GPU encoding when a compatible encoder/device is available: VAAPI on Linux, NVENC/Quick Sync/AMF on Windows, and VideoToolbox on macOS builds. Failed GPU attempts automatically fall back to `libx264` so exports still work on machines without a supported GPU path.
-- The export status now reports the encoder actually used and whether it was hardware-accelerated.
-- Timeline scrubbing batches media seeking and preview drawing to one animation frame, reducing repeated renderer work while dragging the playhead.
-- Removed the recursive animation-frame redraw loop while videos are seeking; the decoder's `seeked`/data events drive the next refresh instead.
-
-### [FIXED]
-- Project loading, autosave restoration and undo snapshots no longer delete group membership, group transforms, masks, collapsed state or active group view. Older grouped projects missing the group table reconstruct a minimal group rather than losing the link.
-- Added regressions for hardware encoder command construction, GPU upload filters, preview scrub coalescing and group persistence.
-
-### [COMPATIBILITY]
-- Preserved the existing project schema; projects from earlier 2.4.x versions do not require conversion.
-- Windows NSIS and Linux AppImage remain the supported `electron-updater` channels. Older portable ZIP and DEB/RPM installs cannot be retroactively made auto-updating by a new release alone; they must first move to a supported installer channel.
-- The CI workflow requires the release tag and `frame-studio-linux/package.json` to match exactly. Publish as `v2.4.30` only if that tag has not already been used for an existing public release; an already-published `2.4.30` must be followed by `2.4.31` for clients to recognize it as newer.
-
 # FRAME Studio — Changelog
 
-## 2.4.28 — Camera Pivot, Multi-select Resize, Accent Gradients & Audio Continuity
+## 2.4.32 — FRAME ID & Community
 
-### [FIXED]
-- Camera orbit now moves around the configured pivot and recomputes the camera look-at rotation, including when the pivot is offset from world origin.
-- Added a small pivot marker to the Scene Editor preview overlay only. It is not composited into rendered/exported frames.
-- Ctrl/Cmd-click multi-selection is handled before timeline clip nodes are rebuilt, fixing clicks being lost during re-render.
-- Dragging a selected clip's timeline trim/duration edge applies the same delta to all selected clips and adjusts affected keyframes; undo restores the prior states.
-- At adjacent split boundaries, preview/audio sync chooses the most recently started active clip for a shared media element instead of pausing on the outgoing clip. Video sound remains active when a photo or other visual layer covers it.
+### [ADDED]
+- Optional account system backed by Supabase Auth: e-mail sign-up/sign-in, confirmation flow, password-recovery email request, refreshable sessions and sign-out. Editing remains local-first and works without a community backend.
+- Public creator profiles with avatar, display name, unique username, 160-character bio and optional pronouns. Public profile data excludes e-mail addresses.
+- Community directory with exact member total, last-seen online counter, username/name search, member pagination and periodic refresh.
+- Friend requests, accept/decline, friends list, removal, blocking/unblocking and profile reports.
+- `SUPABASE_SETUP.sql` creates the profile, friend, block, report and avatar-storage policies/functions using row-level security. Uploads are restricted to the user's own avatar folder and limited to 2 MB image files.
 
-### [IMPROVED]
-- Accent appearance now offers a custom three-stop gradient picker with angle control, solid color, animated RGB cycle, and background-adaptive RGB.
-- Background-adaptive colors sample still images, animated GIFs, and video backgrounds periodically; saturation and lightness settings affect the adaptive gradient. Sampling failures fall back safely.
-- Kept the existing project schema and updater configuration; the release tag and `package.json` version must both be `2.4.28`.
+### [SECURITY & COMPATIBILITY]
+- The app only accepts an HTTPS Supabase project URL and a publishable/anon client key. Never put a `service_role` key in the packaged app.
+- Community data is not faked: without configuration, the community UI explains setup and member/online counters remain unavailable. Existing timeline/project storage and the GitHub update channel are unchanged.
+- Community schema and credentials are external to project files; old projects require no migration. The in-app desktop reset callback is not implemented yet, so validate recovery-email redirects before advertising a complete password reset.
+- Presence is heartbeat-based and expires after two minutes without an update. This is near-real-time polling, not a websocket presence guarantee.
 
-### [TESTING]
-- Full automated suite passes, including export/ffprobe integration, media seeking, project compatibility assertions, customization, and updater configuration.
-- Packaged Electron GUI testing and the actual release CI build remain necessary before broad distribution.
+## 2.4.31 — Appearance RGB, Camera Pivot, Multi-layer Workflow & Freeze Splits
+
+- Added solid, animated RGB, and background-adaptive accent modes with saturation, lightness, and speed controls. Adaptive color samples the selected image/video when the media is canvas-readable and safely falls back to the chosen accent otherwise.
+- Added an optional camera look-at pivot with numeric XYZ controls, “pivot at selected layer,” and orbit/navigation around the chosen point.
+- Added timeline controls to group/ungroup selected layers and enter/exit a group. Effects chosen from the effect library now apply to all selected layers/groups; resizing a selected transform handle scales all selected layers proportionally.
+- Added a Time Remap Freeze Frame split operation that creates before / one-second frozen frame / after segments on the same track, keeping project content in the existing format.
+- Added “End + join” to trim at the playhead and close the next gap on the same track by shifting the following clips.
+- Preserved existing project fields and defaulted new camera-pivot/appearance settings, so older projects remain readable.
 
 ## 2.4.25 — Downloaded media seeking and updater reliability
 

@@ -68,7 +68,7 @@ function fakeVideo({ currentTime = 0, seeking = false, readyState = 2 } = {}) {
   assert.match(begin, /playing=false;playStarting=false;playbackEpoch\+\+;lastFrame=0/);
   assert.match(begin, /settleTimelineVideoSeeksAtPlayhead\(\)/);
   const attach = html.match(/function attachTimelineVideoPreviewEvents\(asset,el\)\{([^\n]+)/)?.[1] || '';
-  assert.match(attach, /activeClipForAsset\(asset\.id,playhead/);
+  assert.match(attach, /activeAt\(playhead\)/);
   assert.match(attach, /invalidateVideoPreviewTexture\(asset\.id\)/);
 }
 

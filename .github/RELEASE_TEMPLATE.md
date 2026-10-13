@@ -1,17 +1,20 @@
-# FRAME Studio 2.4.30 — GPU Export, Faster Preview & Grouping Fixes
+## ✨ FRAME Studio 2.4.32 — FRAME ID & Community
 
-### 🐛 Correções
-- O agrupamento mantém os IDs dos clipes, transformações, máscaras, subgrupos e estado recolhido ao abrir projetos, restaurar autosaves e desfazer/refazer ações.
-- O scrubbing da timeline deixa de disparar seeks e redesenhos redundantes em cada evento do mouse; os frames são agrupados por frame de animação.
-- Foi removido o ciclo de redraw contínuo enquanto um vídeo aguarda o seek.
+### 🐛 Correções e compatibilidade
+- [FIX] O sistema social é opcional e isolado do mecanismo de edição local.
+- [COMPATIBILITY] Formato dos projetos, timeline, preview, exportação e canal de auto-update permanecem inalterados.
 
-### ⚡ Melhorias
-- A exportação MP4 tenta usar codificação por hardware quando o FFmpeg e o dispositivo oferecem suporte: VAAPI no Linux, NVENC/Quick Sync/AMF no Windows e VideoToolbox no macOS.
-- Se o driver, encoder ou hardware não aceitar a exportação, o FRAME Studio tenta o próximo encoder e por fim usa `libx264` por CPU para não bloquear a exportação.
-- O status do render mostra qual encoder foi realmente usado e se houve aceleração por GPU.
+### ✨ Adicionado
+- [ADDED] FRAME ID: cadastro, login, solicitação de recuperação por e-mail e sessão persistente por Supabase Auth.
+- [ADDED] Perfil público com foto, nome, @usuário, bio e pronomes opcionais.
+- [ADDED] Comunidade com pesquisa, total de membros, contador online, atualização periódica e paginação.
+- [ADDED] Pedidos de amizade, aceitar/recusar, lista de amigos, remover amizade, bloquear/desbloquear e denunciar perfil.
+- [ADDED] `SUPABASE_SETUP.sql` com schema e políticas RLS para perfis, amizades, bloqueios, denúncias e upload de avatares.
 
-### 🧩 Compatibilidade e atualização
-- O formato dos projetos continua compatível com projetos 2.4.x; projetos existentes não exigem conversão.
-- `frame-studio-linux/package.json` deve ter versão `2.4.30`, e a release no GitHub deve usar a tag `v2.4.30`.
-- As atualizações automáticas são suportadas pelo instalador NSIS do Windows e AppImage do Linux. Instalações portáteis/ZIP, DEB e RPM não usam o mesmo fluxo de substituição automática.
-- Testes automatizados passaram neste workspace. A compilação real do GitHub Actions e a confirmação de encoding na GPU precisam ser verificadas no release e no hardware de destino.
+### 🧩 Configuração necessária
+- Preencher `frame-studio-linux/community-config.js` com a URL HTTPS e a chave publishable/anon do projeto Supabase.
+- Executar `frame-studio-linux/SUPABASE_SETUP.sql` no SQL Editor do Supabase.
+- Nunca usar a chave `service_role` no app cliente. Sem backend configurado, a edição offline continua funcionando e a comunidade não exibe dados falsos. O redirecionamento final de redefinição de senha precisa ser validado na configuração Auth do Supabase.
+
+### 📦 Downloads
+Os instaladores Windows e Linux e os metadados de atualização devem ser anexados pelo workflow do GitHub Actions após todos os builds e testes passarem.

@@ -1,20 +1,20 @@
-# FRAME Studio 2.4.30 — Release Compatibility
+# FRAME Studio 2.4.32
 
-This is an incremental release of the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. This workspace could not inspect the live GitHub repository, so it cannot verify that the ZIP includes every commit currently on the remote `main`. Compare/merge with the current branch before publishing; do not overwrite newer fixes with this archive alone.
+FRAME ID & Community is optional and requires configuring `community-config.js` and running `SUPABASE_SETUP.sql`. See `../README-COMMUNITY-2.4.32.md`. The app remains usable offline without an account.
 
-## 2.4.30 focus fixes
-- MP4 export prefers available GPU H.264 encoders (Linux VAAPI, Windows NVENC/Quick Sync/AMF, macOS VideoToolbox) and safely falls back to `libx264` when the local FFmpeg build or driver cannot use them. Export status identifies the actual encoder. GPU encoding is a runtime capability, so verify the reported `GPU` label on the target machine.
-- Timeline playhead scrubbing now coalesces seek/render work to animation frames and avoids an endless RAF redraw loop during video seeks.
-- Group membership, transforms, group masks and collapsed/active group state survive project open, autosave recovery and undo/redo. Older projects with group IDs but no group table reconstruct a minimal group.
+# FRAME Studio 2.4.31 — Appearance, Camera Pivot & Timeline Workflow
 
-## Carried-forward features
-- Appearance accent modes: solid, a manually authored gradient with three color stops and angle, animated RGB cycle, and a background-adaptive gradient sampled from image/GIF/video with saturation and lightness controls.
-- 3D camera pivot orbit keeps the camera aimed at the target. The pivot dot is an editor-only preview gizmo and is not drawn into exported frames.
-- Ctrl/Cmd-click multi-selection, group/ungroup, and resize of all selected timeline clips using the same edge drag; multi-layer transform-handle scaling remains supported.
-- Time Remap Freeze Frame · Split and End + join timeline actions.
+This is an incremental update to the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. The source archive available for this update was based on the 2.4.25 source kit; changes that may exist only in remote releases 2.4.26–2.4.30 were not available in this workspace and should be merged from the actual 2.4.30 source before replacing the latest release.
+
+## Added
+- Appearance accent modes: solid color, animated RGB gradient, and background-adaptive RGB gradient, with saturation, lightness, and speed controls. Background palette sampling falls back safely when an image/video cannot be sampled by the browser.
+- Optional 3D camera look-at pivot, numeric XYZ controls, pivot-at-selected-layer, and orbit navigation around the pivot.
+- Group/ungroup and enter/exit group controls; effect-library selections apply to selected layers, and transform-handle resizing scales multiple selected layers together.
+- Time Remap Freeze Frame · Split: creates before, one-second frozen-frame, and after segments on the same track.
+- End + join: trims a clip at the playhead and closes the following gap on that track.
 
 ## Compatibility and tests
-No project schema migration is introduced. Camera pivot and appearance settings keep backward-compatible defaults, and the existing project/update configuration is retained. Automated compatibility and updater tests pass; packaged Windows/Linux auto-update still needs the actual release workflow and installed-app verification. Background sampling falls back safely if Chromium blocks pixel access to a selected media file.
+Older project files remain readable. The added camera pivot fields default when absent. Background-adaptive accent color depends on whether the Electron/Chromium canvas can sample the selected background media.
 
 Run from this directory:
 ```sh
@@ -22,7 +22,7 @@ npm install --no-audit --no-fund
 npm test
 ```
 
-Automated regression tests cover encoder command construction, fallback exports, group persistence and playhead coalescing. A packaged Electron GUI and GPU driver were not available in this workspace, so confirm the export status reports GPU on target hardware and test grouping/scrubbing in the installed app before distribution.
+Automated regression tests pass in this source workspace. A packaged Electron GUI was not launched here, so verify the appearance controls, camera pivot/orbit, multi-layer effects/resizing, freeze split, and end-and-join operation in the actual app before treating the update as fully validated.
 
 ## Release
-The package version is `2.4.30` and must be published with tag `v2.4.30`; keep the tag and `package.json` version identical for automatic updates. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. Before publishing, compare against the live default branch and confirm `v2.4.30` is newer than the latest published GitHub Release. The current source snapshot could not be checked against the live repository from this workspace.
+The package version is `2.4.31` and should be published with tag `v2.4.31`. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. Do not publish this archive over 2.4.30 without first merging any changes that exist only in that version.

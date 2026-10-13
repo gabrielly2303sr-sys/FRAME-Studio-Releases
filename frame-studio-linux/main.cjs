@@ -797,8 +797,7 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
       canceled: false, filePath: session.outputPath, size: metadata.size,
       duration: metadata.duration, videoCodec: metadata.videoCodec,
       audioCodec: metadata.audioCodec, fps: metadata.fps,
-      frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true,
-      encoder: metadata.encoder, hardwareAcceleration: metadata.hardwareAcceleration
+      frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true
     };
   } catch (error) {
     if (error?.code === 'EXPORT_CANCELED' || job.controller.signal.aborted) return { canceled: true };
