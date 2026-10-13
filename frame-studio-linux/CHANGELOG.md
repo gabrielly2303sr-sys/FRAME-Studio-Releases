@@ -1,5 +1,14 @@
 # FRAME Studio — Changelog
 
+## 2.4.33 — Release pipeline reliability
+
+### [FIXED]
+- `tests/export-integration.js`: the cancellation test used a `#!/usr/bin/env node` stand-in for FFmpeg. Windows cannot execute shebang scripts, so spawn failed and the test saw "FFmpeg is not available" instead of `EXPORT_CANCELED`, failing the Windows release job. On Windows the stand-in is now a real `.exe` (a copy of `node.exe`) that is terminated by the abort signal; POSIX behavior is unchanged.
+- Linux release job: the static FFmpeg download from johnvansickle.com timed out from GitHub runners. The workflow and `scripts/prepare-bundled-tools.cjs` now try GitHub-hosted FFmpeg builds first (BtbN FFmpeg-Builds), fall back to johnvansickle.com, and use curl retries/timeouts. Archive extraction timeout raised for the larger archive.
+
+### [COMPATIBILITY]
+- No app, project-format, FRAME ID/community or auto-update behavior changes. Version bumped to 2.4.33 so installed 2.4.32 builds can update to it.
+
 ## 2.4.32 — FRAME ID & Community
 
 ### [ADDED]

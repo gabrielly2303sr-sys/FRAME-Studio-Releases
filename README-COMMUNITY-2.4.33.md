@@ -1,4 +1,4 @@
-# FRAME Studio 2.4.32 — FRAME ID & Community
+# FRAME Studio 2.4.33 — FRAME ID & Community
 
 This source kit adds an optional social system to the existing Electron editor. It does not replace project storage or require signing in to edit/export.
 
@@ -36,7 +36,7 @@ If configuration is left blank, Community explains how to set it up and shows no
 cd frame-studio-linux
 npm install --no-audit --no-fund
 npm test
-node -p "require('./package.json').version" # must print 2.4.32
+node -p "require('./package.json').version" # must print 2.4.33
 ```
 
-See `PUBLISH-2.4.32.md` for terminal release instructions.
+See `PUBLISH-2.4.33.md` for terminal release instructions.

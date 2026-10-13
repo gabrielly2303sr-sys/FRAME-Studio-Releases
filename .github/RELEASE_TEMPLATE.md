@@ -1,6 +1,9 @@
-## ✨ FRAME Studio 2.4.32 — FRAME ID & Community
+## ✨ FRAME Studio 2.4.33 — Estabilidade do pipeline de release
 
 ### 🐛 Correções e compatibilidade
+- [FIX] Build Windows: o teste de cancelamento de exportação não usa mais script com shebang (que o Windows não executa).
+- [FIX] Build Linux: download do FFmpeg agora usa builds hospedados no GitHub, com fallback e novas tentativas.
+- [COMPATIBILITY] Auto-update, formato de projetos e FRAME ID/Comunidade permanecem inalterados (herdados da 2.4.32).
 - [FIX] O sistema social é opcional e isolado do mecanismo de edição local.
 - [COMPATIBILITY] Formato dos projetos, timeline, preview, exportação e canal de auto-update permanecem inalterados.
 

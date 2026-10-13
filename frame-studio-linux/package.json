@@ -1,6 +1,6 @@
 {
   "name": "frame-studio",
-  "version": "2.4.32",
+  "version": "2.4.33",
   "private": true,
   "description": "Video editor with FRAME ID accounts, creator community, friends, camera pivot orbit, adaptive accent gradients and timeline workflows",
   "main": "main.cjs",

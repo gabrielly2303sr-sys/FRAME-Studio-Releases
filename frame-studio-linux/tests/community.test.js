@@ -11,12 +11,12 @@ const community = fs.readFileSync(path.join(app, 'community.js'), 'utf8');
 const config = fs.readFileSync(path.join(app, 'community-config.js'), 'utf8');
 const sql = fs.readFileSync(path.join(app, 'SUPABASE_SETUP.sql'), 'utf8');
 
-assert.equal(pkg.version, '2.4.32', 'package version must match release tag');
+assert.equal(pkg.version, '2.4.33', 'package version must match release tag');
 for (const file of ['community.js', 'community.css', 'community-config.js']) {
   assert.ok(pkg.build.files.includes(file), `${file} must be packaged in Windows and Linux builds`);
 }
 assert.ok(pkg.scripts.test.includes('tests/community.test.js'), 'community regression suite must run under npm test');
-assert.match(html, /FRAME Studio 2\.4\.32/, 'document title has the release version');
+assert.match(html, /FRAME Studio 2\.4\.33/, 'document title has the release version');
 assert.match(community, /data-community-tab="community"/, 'community tab is present in the runtime dialog');
 assert.match(html, /\./, 'index page is readable');
 assert.match(html, /https:\/\/\*\.supabase\.co/, 'CSP allows Supabase HTTPS endpoints');
@@ -61,4 +61,4 @@ assert.equal(isSafeAvatarUrl('https://attacker.example/storage/v1/object/public/
 assert.equal(isSafeAvatarUrl('https://myproject.supabase.co/storage/v1/object/public/profile-avatars/u/x.png', 'https://myproject.supabase.co'), true);
 assert.equal(Object.hasOwn(p, 'secret'), false, 'public profile projection discards unexpected/private fields');
 
-console.log('FRAME Studio 2.4.32 community regression tests: OK');
+console.log('FRAME Studio 2.4.33 community regression tests: OK');

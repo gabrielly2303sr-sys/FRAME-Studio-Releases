@@ -158,9 +158,18 @@ async function main() {
     await fs.writeFile(corrupted, 'não é um vídeo');
     await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /ffprobe failed|metadata|duration/i);
 
-    const fakeFfmpeg = path.join(dir, 'fake-ffmpeg');
-    await fs.writeFile(fakeFfmpeg, '#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n');
-    await fs.chmod(fakeFfmpeg, 0o755);
+    // Stand-in for a long-running FFmpeg process, used only to test cancellation.
+    // POSIX can execute a shebang script; Windows cannot (CreateProcess ignores shebangs and
+    // spawn fails, which surfaced as "FFmpeg is not available" instead of EXPORT_CANCELED).
+    // On Windows we therefore copy the real node.exe to a real .exe. It is killed by the abort
+    // signal immediately after spawn, so it never has to run the FFmpeg arguments.
+    const fakeFfmpeg = path.join(dir, process.platform === 'win32' ? 'fake-ffmpeg.exe' : 'fake-ffmpeg');
+    if (process.platform === 'win32') {
+      await fs.copyFile(process.execPath, fakeFfmpeg);
+    } else {
+      await fs.writeFile(fakeFfmpeg, '#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n');
+      await fs.chmod(fakeFfmpeg, 0o755);
+    }
     const controller = new AbortController();
     const canceledPath = path.join(dir, 'canceled.mp4');
     await assert.rejects(

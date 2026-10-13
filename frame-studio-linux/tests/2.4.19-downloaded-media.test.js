@@ -9,7 +9,7 @@ const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'release.yml'), 'utf8');
 
-assert.equal(pkg.version, '2.4.32');
+assert.equal(pkg.version, '2.4.33');
 assert.match(pkg.build.win.extraResources.map(x => `${x.from}=>${x.to}`).join('\n'), /vendor\/win=>downloader/);
 assert.match(pkg.build.linux.extraResources.map(x => `${x.from}=>${x.to}`).join('\n'), /vendor\/linux=>downloader/);
 assert.match(main, /function downloadedMediaRoot\(\)\s*\{\s*return path\.join\(app\.getPath\('userData'\), 'Media Library', 'Downloaded Media'\)/);

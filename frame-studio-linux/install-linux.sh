@@ -3,7 +3,7 @@ set -euo pipefail
 
 SRC_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SRC_DIR/package.json" | head -n1)"
-VERSION="${VERSION:-2.4.31}"
+VERSION="${VERSION:-2.4.33}"
 INSTALL_DIR="$HOME/.local/opt/frame-studio"
 APPS_DIR="$HOME/.local/share/applications"
 BIN_DIR="$HOME/.local/bin"

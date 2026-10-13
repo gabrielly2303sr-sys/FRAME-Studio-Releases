@@ -1,6 +1,6 @@
-# FRAME Studio 2.4.32 — FRAME ID & Community Source Kit
+# FRAME Studio 2.4.33 — FRAME ID & Community Source Kit
 
-Este pacote incrementa a base FRAME Studio 2.4.31 para 2.4.32, adicionando um sistema social opcional. O editor continua funcionando sem conta ou conexão.
+Este pacote incrementa a base FRAME Studio 2.4.33 para 2.4.33, adicionando um sistema social opcional. O editor continua funcionando sem conta ou conexão.
 
 ## Recursos
 - FRAME ID: cadastro, login, logout, recuperação de senha e sessão persistente.
@@ -17,4 +17,4 @@ Crie um projeto Supabase, execute o SQL fornecido e configure apenas URL HTTPS +
 Na pasta `frame-studio-linux`: `npm install --no-audit --no-fund` e `npm test`. A suíte automatizada passou neste workspace. Os builds empacotados Windows/Linux e o fluxo real do Supabase ainda precisam de teste antes da release pública.
 
 ## Publicação
-Siga `PUBLISH-2.4.32.md`. Este ZIP não cria uma release nem envia commits ao GitHub.
+Siga `PUBLISH-2.4.33.md`. Este ZIP não cria uma release nem envia commits ao GitHub.

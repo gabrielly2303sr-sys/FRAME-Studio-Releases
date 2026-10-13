@@ -155,11 +155,25 @@ jobs:
           set -euo pipefail
           vendor="$PWD/vendor/linux"
           mkdir -p "$vendor"
-          curl -fsSL --retry 3 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" -o "$vendor/yt-dlp"
+          curl -fsSL --retry 4 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 300 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" -o "$vendor/yt-dlp"
           chmod 0755 "$vendor/yt-dlp"
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          curl -fsSL --retry 3 "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o "$tmp/ffmpeg.tar.xz"
+          # The FFmpeg static build is fetched from GitHub-hosted releases first (reachable from
+          # GitHub runners), then from a mirror. johnvansickle.com timed out from the runners.
+          download_ok=0
+          for url in \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+            "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"; do
+            echo "Downloading FFmpeg from $url"
+            if curl -fsSL --retry 4 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "$url" -o "$tmp/ffmpeg.tar.xz"; then
+              download_ok=1
+              break
+            fi
+            echo "Download failed, trying next source..." >&2
+          done
+          test "$download_ok" = "1" || { echo "Could not download FFmpeg from any source." >&2; exit 1; }
           tar -xJf "$tmp/ffmpeg.tar.xz" -C "$tmp"
           ffmpeg_path="$(find "$tmp" -type f -name ffmpeg | head -n 1)"
           ffprobe_path="$(find "$tmp" -type f -name ffprobe | head -n 1)"
@@ -168,7 +182,7 @@ jobs:
           install -m 0755 "$ffprobe_path" "$vendor/ffprobe"
           mkdir -p "$vendor/licenses/ffmpeg"
           find "$tmp" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'GPL*' -o -iname 'LGPL*' -o -iname 'README*' -o -iname 'AUTHORS*' -o -iname 'NOTICE*' \) -exec cp -f {} "$vendor/licenses/ffmpeg/" \; || true
-          curl -fsSL --retry 3 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"
+          curl -fsSL --retry 4 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 120 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"
       - name: Verify downloaded Linux tools run with their correct arguments
         working-directory: frame-studio-linux
         run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux

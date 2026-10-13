@@ -144,9 +144,21 @@ async function prepareLinux() {
     const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'frame-ffmpeg-linux-'));
     try {
       const archive = path.join(temp, 'ffmpeg-release-amd64-static.tar.xz');
-      await fetchToFile('https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz', archive);
+      // GitHub-hosted builds first (johnvansickle.com is unreachable from some networks/CI runners).
+      const sources = [
+        'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz',
+        'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz',
+        'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz'
+      ];
+      let lastError = null;
+      let downloaded = false;
+      for (const source of sources) {
+        try { await fetchToFile(source, archive); downloaded = true; break; }
+        catch (error) { lastError = error; log(`FFmpeg download failed from ${source}: ${error?.message || error}`); }
+      }
+      if (!downloaded) throw lastError || new Error('Could not download FFmpeg from any source.');
       await fsp.mkdir(path.join(temp, 'unpacked'), { recursive: true });
-      run('tar', ['-xJf', archive, '-C', path.join(temp, 'unpacked')]);
+      run('tar', ['-xJf', archive, '-C', path.join(temp, 'unpacked')], { timeout: 180000 });
       const ffmpeg = await recursiveFind(path.join(temp, 'unpacked'), 'ffmpeg');
       const ffprobe = await recursiveFind(path.join(temp, 'unpacked'), 'ffprobe');
       if (!ffmpeg || !ffprobe) throw new Error('FFmpeg or ffprobe was not found in the downloaded static archive.');

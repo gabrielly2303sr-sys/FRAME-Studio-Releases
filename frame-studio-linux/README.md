@@ -1,6 +1,6 @@
-# FRAME Studio 2.4.32
+# FRAME Studio 2.4.33
 
-FRAME ID & Community is optional and requires configuring `community-config.js` and running `SUPABASE_SETUP.sql`. See `../README-COMMUNITY-2.4.32.md`. The app remains usable offline without an account.
+FRAME ID & Community is optional and requires configuring `community-config.js` and running `SUPABASE_SETUP.sql`. See `../README-COMMUNITY-2.4.33.md`. The app remains usable offline without an account.
 
 # FRAME Studio 2.4.31 — Appearance, Camera Pivot & Timeline Workflow
 

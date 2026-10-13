@@ -15,7 +15,7 @@ function grab(name) {
   return html.slice(start, next < 0 ? html.length : next);
 }
 
-assert.equal(pkg.version, '2.4.32', 'package and release tag must stay aligned');
+assert.equal(pkg.version, '2.4.33', 'package and release tag must stay aligned');
 const removeAsset = grab('removeAssetFromProject');
 assert.match(removeAsset, /clips=clips\.filter\(clip=>clip\.assetId!==id\)/, 'removing a project asset also removes clips linked to it');
 assert.match(removeAsset, /assets=assets\.filter\(item=>item\.id!==id\)/, 'the asset is removed from the current project bin');

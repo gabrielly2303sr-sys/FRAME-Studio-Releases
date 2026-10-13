@@ -1,0 +1,84 @@
+[1mdiff --git a/.github/workflows/release.yml b/.github/workflows/release.yml[m
+[1mindex 010aca7..b6b39b1 100644[m
+[1m--- a/.github/workflows/release.yml[m
+[1m+++ b/.github/workflows/release.yml[m
+[36m@@ -3,6 +3,12 @@[m [mname: Build and publish FRAME Studio[m
+ on:[m
+   release:[m
+     types: [published][m
+[32m+[m[32m  workflow_dispatch:[m
+[32m+[m[32m    inputs:[m
+[32m+[m[32m      release_tag:[m
+[32m+[m[32m        description: "Existing release tag to build/update, for example v2.4.30"[m
+[32m+[m[32m        required: true[m
+[32m+[m[32m        type: string[m
+ [m
+ permissions:[m
+   contents: write[m
+[36m@@ -13,16 +19,16 @@[m [mjobs:[m
+     runs-on: windows-latest[m
+     steps:[m
+       - name: Check out release source[m
+[31m-        uses: actions/checkout@v4[m
+[32m+[m[32m        uses: actions/checkout@v5[m
+       - name: Set up Node.js[m
+[31m-        uses: actions/setup-node@v4[m
+[32m+[m[32m        uses: actions/setup-node@v5[m
+         with:[m
+           node-version: 22[m
+       - name: Verify release tag matches package version[m
+         working-directory: frame-studio-linux[m
+         shell: pwsh[m
+         env:[m
+[31m-          RELEASE_TAG: ${{ github.event.release.tag_name }}[m
+[32m+[m[32m          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}[m
+         run: |[m
+           $tagVersion = $env:RELEASE_TAG.TrimStart('v')[m
+           $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version[m
+[36m@@ -48,6 +54,8 @@[m [mjobs:[m
+           New-Item -ItemType Directory -Force -Path $ffmpegLicenses | Out-Null[m
+           Get-ChildItem $unpack -Recurse -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|GPL|LGPL|README|AUTHORS|NOTICE)' } | Copy-Item -Destination $ffmpegLicenses -Force[m
+           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -OutFile (Join-Path $licenses "yt-dlp-LICENSE.txt")[m
+[32m+[m[32m          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.[m
+[32m+[m[32m          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $PWD "vendor\win")[m
+       - name: Verify downloaded Windows tools run with their correct arguments[m
+         working-directory: frame-studio-linux[m
+         shell: pwsh[m
+[36m@@ -117,16 +125,16 @@[m [mjobs:[m
+     runs-on: ubuntu-22.04[m
+     steps:[m
+       - name: Check out release source[m
+[31m-        uses: actions/checkout@v4[m
+[32m+[m[32m        uses: actions/checkout@v5[m
+       - name: Set up Node.js[m
+[31m-        uses: actions/setup-node@v4[m
+[32m+[m[32m        uses: actions/setup-node@v5[m
+         with:[m
+           node-version: 22[m
+       - name: Verify release tag matches package version[m
+         working-directory: frame-studio-linux[m
+         shell: bash[m
+         env:[m
+[31m-          RELEASE_TAG: ${{ github.event.release.tag_name }}[m
+[32m+[m[32m          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}[m
+         run: |[m
+           set -euo pipefail[m
+           tag_version="${RELEASE_TAG#v}"[m
+[36m@@ -160,6 +168,8 @@[m [mjobs:[m
+           mkdir -p "$vendor/licenses/ffmpeg"[m
+           find "$tmp" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'GPL*' -o -iname 'LGPL*' -o -iname 'README*' -o -iname 'AUTHORS*' -o -iname 'NOTICE*' \) -exec cp -f {} "$vendor/licenses/ffmpeg/" \; || true[m
+           curl -fsSL --retry 3 "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/LICENSE" -o "$vendor/licenses/yt-dlp-LICENSE.txt"[m
+[32m+[m[32m          # Integration tests spawn `ffmpeg` and `ffprobe` by command name. Use the exact binaries bundled into the app.[m
+[32m+[m[32m          echo "$vendor" >> "$GITHUB_PATH"[m
+       - name: Verify downloaded Linux tools run with their correct arguments[m
+         working-directory: frame-studio-linux[m
+         run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux[m
+[36m@@ -264,7 +274,7 @@[m [mjobs:[m
+       - name: Upload installers and updater metadata to this release[m
+         uses: softprops/action-gh-release@v2[m
+         with:[m
+[31m-          tag_name: ${{ github.event.release.tag_name }}[m
+[32m+[m[32m          tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}[m
+           overwrite_files: true[m
+           fail_on_unmatched_files: true[m
+           files: |[m
