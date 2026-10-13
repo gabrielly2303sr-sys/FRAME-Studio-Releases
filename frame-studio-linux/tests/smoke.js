@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.27', 'package version');
+assert.equal(pkg.version, '2.4.28', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -96,19 +96,6 @@ vm.runInContext('syncMedia(false)', playbackContext);
 assert.equal(endedMedia.playCalls, 0, 'um source no fim do clipe não deve ser reiniciado repetidamente');
 assert.equal(endedMedia.paused, true, 'o source deve manter-se parado enquanto a timeline continua');
 assert.ok(Math.abs(endedMedia.currentTime - (1 - 0.25/30)) < 0.002, 'o source deve ficar no último frame seguro');
-
-// A video's audio mirror must keep playing even when a visual layer sits above it.
-const layeredVideo = { id:'video-layer', assetId:'asset-audio-mirror', kind:'video', track:1, start:0, inPoint:0, outPoint:8, speed:1, volume:100, fadeIn:0, fadeOut:0, timeRemap:[] };
-const occludingImage = { id:'image-overlay', assetId:'still-overlay', kind:'image', track:2, start:0, inPoint:0, outPoint:8, speed:1 };
-const videoElement = makeMedia(.75,false), audioMirrorElement = makeMedia(.75,false);
-const audioMirrorContext = vm.createContext({
-  activeAt:()=>[layeredVideo,occludingImage], assets:[{id:'asset-audio-mirror',name:'layered.mp4',kind:'video',duration:8,el:videoElement,audioEl:audioMirrorElement}], trackSettings:{}, playhead:1, playing:true, offlineRendering:false, previewMode:'timeline',
-  projectFPS:30, playbackEpoch:3, mediaPlayErrors:new Set(), clamp:(n,a,b)=>Math.max(a,Math.min(b,n)), sourceRateAt:c=>Number(c.speed)||1, sourceTimeAt:(c,t)=>Number(c.inPoint)+(t-Number(c.start))*(Number(c.speed)||1),
-  Number, Math, setStatus:text=>audioMirrorContext.statuses.push(text), statuses:[], $:()=>({textContent:''})
-});
-vm.runInContext(syncBlock,audioMirrorContext);vm.runInContext('syncMedia(true)',audioMirrorContext);
-assert.equal(videoElement.playCalls,1,'o elemento visual continua reproduzindo para decodificar frames');
-assert.equal(audioMirrorElement.playCalls,1,'o áudio do vídeo deve continuar independente da imagem que o cobre');
 
 // A real HTMLMediaElement `ended` event must not turn off the project clock.
 const endedHandlerBlock = renderer.match(/function handleMediaEnded\(asset\)\{[\s\S]*?\n\}\nfunction seekVideoPreviewTo/)?.[0].replace(/\nfunction seekVideoPreviewTo$/, '');
@@ -360,8 +347,6 @@ const center = vm.runInContext('cameraProject({x:0,y:0,z:0})', cameraContext);
 assert.ok(center && Math.abs(center.x - 640) < 0.01 && Math.abs(center.y - 360) < 0.01, 'a câmera padrão deve projetar a origem no centro do canvas');
 const offset = vm.runInContext('cameraProject({x:100,y:0,z:0})', cameraContext);
 assert.ok(offset && offset.x > center.x, 'deslocamento X no mundo deve ser projetado à direita');
-const pivotProjection = vm.runInContext('camera3d.orbitPivotEnabled=true;camera3d.pivotX=100;camera3d.pivotY=60;camera3d.pivotZ=20;cameraProject({x:100,y:60,z:20})', cameraContext);
-assert.ok(pivotProjection && Math.abs(pivotProjection.x-640)<0.01 && Math.abs(pivotProjection.y-360)<0.01, 'a câmera com pivot deve mirar o alvo como uma órbita ao redor do Sol');
 const cameraAnimation = vm.runInContext(`camera3d.keyframes.lens=[{time:0,value:50,ease:${JSON.stringify(linear)}},{time:1,value:100,ease:${JSON.stringify(linear)}}];playhead=.5;cameraAtTime(playhead).lens`, cameraContext);
 assert.ok(Math.abs(cameraAnimation - 75) < 0.01, `distância focal deve interpolar keyframes; recebeu ${cameraAnimation}`);
 

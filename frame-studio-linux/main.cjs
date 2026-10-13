@@ -2,11 +2,6 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol, session } = requir
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const path = require('node:path');
-// Local preview can opt into an isolated profile so it never overwrites the
-// installed FRAME Studio settings, projects cache, or downloaded-media index.
-if (!app.isPackaged && process.env.FRAME_STUDIO_USER_DATA_DIR && !app.isReady()) {
-  app.setPath('userData', path.resolve(process.env.FRAME_STUDIO_USER_DATA_DIR));
-}
 const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');

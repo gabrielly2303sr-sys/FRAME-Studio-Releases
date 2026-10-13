@@ -2,14 +2,14 @@
 (function (root) {
   'use strict';
   const DEFAULTS = Object.freeze({
-    language: 'en-US', accent: '#b5f36c', accentMode: 'solid', accentSaturation: 82, accentLightness: 58, accentSpeed: 5, accentGradient: { angle: 110, stops: [{ position: 0, color: '#00e5ff' }, { position: 50, color: '#af52ff' }, { position: 100, color: '#ff3264' }] }, backgroundPath: '', backgroundName: '', backgroundKind: 'image',
+    language: 'en-US', accent: '#b5f36c', accentMode: 'solid', accentGradient: { angle: 110, colors: ['#b5f36c', '#a78bfa', '#65e0d2'] }, accentSaturation: 82, accentLightness: 58, accentSpeed: 5, backgroundPath: '', backgroundName: '', backgroundKind: 'image',
     bgFit: 'cover', tint: '#101013', blur: 8, overlay: 48, brightness: 85, saturation: 100,
     bgX: 50, bgY: 50, uiOpacity: 92, glass: 8, aura: true, reduceMotion: false, compact: false
   });
   const TRANSLATIONS = {
     'FRAME Studio': 'FRAME Studio', '⌂ Início': '⌂ Home', 'Início': 'Home', '☰ Menu': '☰ Menu', '⚙ Aparência': '⚙ Appearance',
     'Personalizar aparência e idioma': 'Customize appearance and language',
-    'Modo da cor de destaque': 'Accent color mode', 'Cor sólida': 'Solid color', 'RGB dinâmico': 'RGB cycle', 'RGB adaptativo ao fundo': 'Background-adaptive RGB', 'Gradiente personalizado': 'Custom gradient', 'Escolher gradiente…': 'Choose gradient…', 'Editor do gradiente de acento': 'Accent gradient editor', 'Ângulo do gradiente': 'Gradient angle', 'Ponto 1': 'Stop 1', 'Ponto 2': 'Stop 2', 'Ponto 3': 'Stop 3', 'Aplicar gradiente': 'Apply gradient', 'Saturação do acento': 'Accent saturation', 'Luminosidade do acento': 'Accent lightness', 'Velocidade do RGB': 'RGB speed', 'Página inicial': 'Home page', 'Nome do projeto': 'Project name', 'Novo projeto': 'New project',
+    'Modo da cor de destaque': 'Accent style', 'Cor sólida': 'Solid color', 'Gradiente personalizado': 'Custom gradient', 'RGB dinâmico': 'RGB cycle', 'RGB adaptativo ao fundo': 'Background-adaptive RGB', 'Gradiente do acento': 'Accent gradient', 'Cor inicial': 'Start color', 'Cor intermediária': 'Middle color', 'Cor final': 'End color', 'Ângulo': 'Angle', 'Saturação do acento': 'Accent saturation', 'Luminosidade do acento': 'Accent lightness', 'Velocidade do RGB': 'RGB speed', 'Página inicial': 'Home page', 'Nome do projeto': 'Project name', 'Novo projeto': 'New project',
     'Cancelar exportação': 'Cancel export', '↗ Exportar MP4': '↗ Export MP4', 'Exportar MP4': 'Export MP4',
     'LOCAL PROJECT': 'LOCAL PROJECT', 'MÍDIA': 'MEDIA', 'Importar arquivos': 'Import files',
     'Vídeo, imagem e áudio': 'Video, image, and audio', 'Clique para importar; depois arraste para a timeline': 'Click to import, then drag to the timeline',
@@ -305,13 +305,24 @@
   function validHex(value, fallback) {
     return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;
   }
+  function normalizeAccentGradient(value, fallback = DEFAULTS.accentGradient) {
+    const input = value && typeof value === 'object' ? value : {};
+    const source = Array.isArray(input.colors) ? input.colors : [];
+    const defaults = Array.isArray(fallback?.colors) ? fallback.colors : ['#b5f36c', '#a78bfa', '#65e0d2'];
+    return { angle: clamp(input.angle ?? fallback?.angle ?? 110, -360, 360), colors: [0, 1, 2].map(i => validHex(source[i], defaults[i] || '#ffffff')) };
+  }
+  function accentGradientCss(value) {
+    const gradient = normalizeAccentGradient(value);
+    return `linear-gradient(${gradient.angle}deg, ${gradient.colors.join(', ')})`;
+  }
+
   function normalizeSettings(value) {
     const input = value && typeof value === 'object' ? value : {};
     return {
       language: input.language === 'pt-BR' ? 'pt-BR' : 'en-US',
       accent: validHex(input.accent, DEFAULTS.accent),
-      accentMode: ['solid', 'rgb', 'background-rgb', 'custom-gradient'].includes(input.accentMode) ? input.accentMode : DEFAULTS.accentMode,
-      accentGradient: (() => { const raw=input.accentGradient&&typeof input.accentGradient==='object'?input.accentGradient:DEFAULTS.accentGradient; const def=DEFAULTS.accentGradient; const stops=Array.isArray(raw.stops)?raw.stops.slice(0,8).map((stop,i)=>({position:clamp(stop?.position??def.stops[Math.min(i,2)].position,0,100),color:validHex(stop?.color,def.stops[Math.min(i,2)].color)})):def.stops; return {angle:clamp(raw.angle??def.angle,0,360),stops:stops.length>=2?stops.sort((a,b)=>a.position-b.position):def.stops.map(x=>({...x}))}; })(),
+      accentMode: ['solid', 'gradient', 'rgb', 'background-rgb'].includes(input.accentMode) ? input.accentMode : DEFAULTS.accentMode,
+      accentGradient: normalizeAccentGradient(input.accentGradient, DEFAULTS.accentGradient),
       accentSaturation: clamp(input.accentSaturation ?? DEFAULTS.accentSaturation, 15, 100),
       accentLightness: clamp(input.accentLightness ?? DEFAULTS.accentLightness, 25, 82),
       accentSpeed: clamp(input.accentSpeed ?? DEFAULTS.accentSpeed, 1, 20),
@@ -504,7 +515,7 @@
     'Ferramentas do viewport 3D': '3D viewport tools', 'Ir ao fim': 'Go to End', 'Velocidade personalizada': 'Custom Speed'
   });
 
-  const core = { DEFAULTS, TRANSLATIONS, clamp, validHex, normalizeSettings, hexLuminance, accentTextColor };
+  const core = { DEFAULTS, TRANSLATIONS, clamp, validHex, normalizeSettings, normalizeAccentGradient, accentGradientCss, hexLuminance, accentTextColor };
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
   if (typeof document === 'undefined' || !root) return;
 
@@ -585,7 +596,7 @@
   }
   function updateControlValues() {
     const values = {
-      customLanguage: settings.language, customAccent: settings.accent, customAccentMode: settings.accentMode, customAccentSaturation: settings.accentSaturation, customAccentLightness: settings.accentLightness, customAccentSpeed: settings.accentSpeed, customBgFit: settings.bgFit, customTint: settings.tint,
+      customLanguage: settings.language, customAccent: settings.accent, customAccentMode: settings.accentMode, customAccentGradient1: settings.accentGradient.colors[0], customAccentGradient2: settings.accentGradient.colors[1], customAccentGradient3: settings.accentGradient.colors[2], customAccentGradientAngle: settings.accentGradient.angle, customAccentSaturation: settings.accentSaturation, customAccentLightness: settings.accentLightness, customAccentSpeed: settings.accentSpeed, customBgFit: settings.bgFit, customTint: settings.tint,
       customBlur: settings.blur, customOverlay: settings.overlay, customBrightness: settings.brightness,
       customSaturation: settings.saturation, customBgX: settings.bgX, customBgY: settings.bgY,
       customUiOpacity: settings.uiOpacity, customGlass: settings.glass,
@@ -598,9 +609,12 @@
       else element.value = String(value);
     }
     $('#customAccentValue').textContent = settings.accent.toUpperCase();
-    const gradientCss = accentGradientPickerCSS(settings.accentGradient);
-    for (const id of ['customAccentGradientPreview', 'accentGradientDialogPreview']) { const node = $('#'+id); if(node) node.style.background = gradientCss; }
-    const modeHint=$('#customAccentGradientHint'); if(modeHint) modeHint.textContent = settings.accentMode==='background-rgb' ? (settings.language==='en-US'?'Sampling the selected background':'Amostrando o fundo selecionado') : settings.accentMode==='custom-gradient' ? (settings.language==='en-US'?'Using your selected gradient':'Usando o gradiente escolhido') : settings.accentMode==='rgb' ? (settings.language==='en-US'?'Animated RGB cycle':'Ciclo RGB animado') : (settings.language==='en-US'?'Choose a color mode':'Escolha um modo de cor');
+    const gradientControls = $('#customAccentGradientControls');
+    if (gradientControls) gradientControls.hidden = settings.accentMode !== 'gradient';
+    const gradientPreview = $('#customAccentGradientPreview');
+    if (gradientPreview) gradientPreview.style.background = accentGradientCss(settings.accentGradient);
+    const gradientAngleLabel = $('#customAccentGradientAngleValue');
+    if (gradientAngleLabel) gradientAngleLabel.textContent = `${Math.round(settings.accentGradient.angle)}°`;
     $('#customAccentSaturationValue').textContent = `${settings.accentSaturation}%`;
     $('#customAccentLightnessValue').textContent = `${settings.accentLightness}%`;
     $('#customAccentSpeedValue').textContent = `${settings.accentSpeed.toFixed(1)}×`;
@@ -621,6 +635,8 @@
   }
   let sampledBackgroundRGB = null;
   let lastBackgroundSampleAt = 0;
+  let sampleWarningShown = false;
+  let backgroundSamplerTimer = null;
   function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -636,58 +652,69 @@
   }
   function sampleBackgroundPalette(force = false) {
     const now = Date.now();
-    if (!force && now - lastBackgroundSampleAt < 850) return;
+    if (!force && now - lastBackgroundSampleAt < 1100) return;
     lastBackgroundSampleAt = now;
     const source = settings.backgroundKind === 'video' ? $('#customBackgroundVideo') : $('#customBackgroundImage');
     if (!source || source.hidden || !settings.backgroundPath) return;
-    const width = source.videoWidth || source.naturalWidth || 0, height = source.videoHeight || source.naturalHeight || 0;
+    const width = source.videoWidth || source.naturalWidth || source.width || 0;
+    const height = source.videoHeight || source.naturalHeight || source.height || 0;
     if (!width || !height) return;
     try {
-      const sample = document.createElement('canvas'); sample.width = 32; sample.height = 32;
-      const ctx = sample.getContext('2d', { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(source, 0, 0, 32, 32);
-      const pixels = ctx.getImageData(0, 0, 32, 32).data;
-      let r = 0, g = 0, b = 0, weightTotal = 0;
+      const sampleCanvas = document.createElement('canvas'); sampleCanvas.width = 48; sampleCanvas.height = 48;
+      const context = sampleCanvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return;
+      context.drawImage(source, 0, 0, 48, 48);
+      const pixels = context.getImageData(0, 0, 48, 48).data;
+      let r = 0, g = 0, b = 0, count = 0, wr = 0, wg = 0, wb = 0, totalWeight = 0;
       for (let i = 0; i < pixels.length; i += 4) {
         const alpha = pixels[i + 3] / 255;
-        if (alpha < .05) continue;
-        const red=pixels[i],green=pixels[i+1],blue=pixels[i+2];
-        const max=Math.max(red,green,blue),min=Math.min(red,green,blue);
-        const weight=alpha*(.55+((max-min)/255)*.9);
-        r += red*weight; g += green*weight; b += blue*weight; weightTotal += weight;
+        if (alpha < .25) continue;
+        const pr = pixels[i], pg = pixels[i + 1], pb = pixels[i + 2];
+        r += pr; g += pg; b += pb; count++;
+        const chroma = Math.max(pr, pg, pb) - Math.min(pr, pg, pb);
+        if (chroma >= 8) { const weight = alpha * chroma; wr += pr * weight; wg += pg * weight; wb += pb * weight; totalWeight += weight; }
       }
-      if (weightTotal > 0) sampledBackgroundRGB = { r:r/weightTotal, g:g/weightTotal, b:b/weightTotal };
+      if (!count) return;
+      sampledBackgroundRGB = totalWeight > 0
+        ? { r: wr / totalWeight, g: wg / totalWeight, b: wb / totalWeight }
+        : { r: r / count, g: g / count, b: b / count };
       if (settings.accentMode === 'background-rgb') applyAppearance();
-    } catch {
-      // Local file protocols can reject canvas sampling. Retain the last successful color or chosen accent.
-      if (settings.accentMode === 'background-rgb' && !sampledBackgroundRGB) sampledBackgroundRGB = hexToRgb(settings.accent);
-      if (settings.accentMode === 'background-rgb') applyAppearance();
+    } catch (error) {
+      // Security/codec failures keep the last valid color and do not break editor startup.
+      if (!sampleWarningShown) { sampleWarningShown = true; console.warn('FRAME Studio: background color sampling failed', error?.message || error); }
     }
   }
-  function hexToRgb(hex) { const value=validHex(hex,DEFAULTS.accent).slice(1);return {r:parseInt(value.slice(0,2),16),g:parseInt(value.slice(2,4),16),b:parseInt(value.slice(4,6),16)}; }
-  function accentGradientPickerCSS(gradient) { const model=gradient&&typeof gradient==='object'?gradient:DEFAULTS.accentGradient;const stops=(Array.isArray(model.stops)?model.stops:DEFAULTS.accentGradient.stops).map(s=>({position:clamp(s.position,0,100),color:validHex(s.color,'#ffffff')})).sort((a,b)=>a.position-b.position);return `linear-gradient(${clamp(model.angle??110,0,360)}deg, ${stops.map(s=>`${s.color} ${s.position}%`).join(', ')})`; }
   function generatedAccentGradient() {
     const sat = clamp(settings.accentSaturation, 15, 100), light = clamp(settings.accentLightness, 25, 82);
-    let hue = rgbToHsl(...[1, 3, 5].map((offset) => parseInt(settings.accent.slice(offset, offset + 2), 16))).h;
-    if (settings.accentMode === 'background-rgb' && sampledBackgroundRGB) hue = rgbToHsl(sampledBackgroundRGB.r, sampledBackgroundRGB.g, sampledBackgroundRGB.b).h;
-    if (settings.accentMode === 'custom-gradient') return accentGradientPickerCSS(settings.accentGradient);
-    if (settings.accentMode === 'rgb') return `linear-gradient(110deg, hsl(0 ${sat}% ${light}%), hsl(60 ${sat}% ${light}%), hsl(120 ${sat}% ${light}%), hsl(180 ${sat}% ${light}%), hsl(240 ${sat}% ${light}%), hsl(300 ${sat}% ${light}%), hsl(360 ${sat}% ${light}%))`;
+    let hue = rgbToHsl(...[1, 3, 5].map(offset => parseInt(settings.accent.slice(offset, offset + 2), 16))).h;
+    if (settings.accentMode === 'background-rgb' && sampledBackgroundRGB) {
+      hue = rgbToHsl(sampledBackgroundRGB.r, sampledBackgroundRGB.g, sampledBackgroundRGB.b).h;
+    }
+    if (settings.accentMode === 'rgb') {
+      return `linear-gradient(110deg, hsl(0 ${sat}% ${light}%), hsl(60 ${sat}% ${light}%), hsl(120 ${sat}% ${light}%), hsl(180 ${sat}% ${light}%), hsl(240 ${sat}% ${light}%), hsl(300 ${sat}% ${light}%), hsl(360 ${sat}% ${light}%))`;
+    }
     const hues = [hue - 34, hue, hue + 38, hue + 120].map(v => (v + 360) % 360);
     return `linear-gradient(110deg, ${hues.map(h => `hsl(${h} ${sat}% ${light}%)`).join(', ')})`;
   }
+  function syncBackgroundSampler() {
+    if (backgroundSamplerTimer) { clearInterval(backgroundSamplerTimer); backgroundSamplerTimer = null; }
+    if (settings.accentMode !== 'background-rgb' || !settings.backgroundPath) return;
+    const dynamic = settings.backgroundKind === 'video' || /\.gif(?:$|[?#])/i.test(settings.backgroundPath);
+    if (dynamic) backgroundSamplerTimer = setInterval(() => sampleBackgroundPalette(false), 1200);
+    sampleBackgroundPalette(true);
+  }
   function applyAppearance() {
     const style = document.documentElement.style;
-    const gradientMode = settings.accentMode === 'rgb' || settings.accentMode === 'background-rgb';
-    const customGradient = settings.accentMode === 'custom-gradient';
-    const adaptive = settings.accentMode === 'background-rgb' && sampledBackgroundRGB;
-    const accentHex = adaptive ? `#${[adaptive.r,adaptive.g,adaptive.b].map(v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,'0')).join('')}` : customGradient ? (settings.accentGradient.stops[Math.floor(settings.accentGradient.stops.length/2)]?.color||settings.accent) : settings.accent;
-    style.setProperty('--accent', accentHex);
-    style.setProperty('--accent-ink', accentTextColor(accentHex));
-    style.setProperty('--accent-fill', gradientMode || customGradient ? generatedAccentGradient() : settings.accent);
+    const sampledAccent = sampledBackgroundRGB ? '#' + [sampledBackgroundRGB.r, sampledBackgroundRGB.g, sampledBackgroundRGB.b].map(channel => Math.round(channel).toString(16).padStart(2, '0')).join('') : settings.accent;
+    const effectiveAccent = settings.accentMode === 'gradient' ? settings.accentGradient.colors[1] : settings.accentMode === 'background-rgb' && sampledBackgroundRGB ? sampledAccent : settings.accent;
+    style.setProperty('--accent', effectiveAccent);
+    style.setProperty('--accent-ink', accentTextColor(effectiveAccent));
+    const gradientMode = ['gradient', 'rgb', 'background-rgb'].includes(settings.accentMode);
+    const accentFill = settings.accentMode === 'gradient' ? accentGradientCss(settings.accentGradient) : gradientMode ? generatedAccentGradient() : settings.accent;
+    style.setProperty('--accent-fill', accentFill);
     style.setProperty('--accent-speed', `${Math.max(1, 21 - settings.accentSpeed)}s`);
-    document.documentElement.classList.toggle('accent-gradient-active', (gradientMode || customGradient) && !settings.reduceMotion);
-    document.documentElement.classList.toggle('accent-gradient-static', customGradient);
+    document.documentElement.classList.toggle('accent-gradient-active', ['rgb', 'background-rgb'].includes(settings.accentMode) && !settings.reduceMotion);
+    document.documentElement.classList.toggle('accent-gradient-static', settings.accentMode === 'gradient');
     style.setProperty('--ui-opacity', String(settings.uiOpacity / 100));
     style.setProperty('--ui-glass-blur', `${settings.glass}px`);
     style.setProperty('--bg-blur', `${settings.blur}px`);
@@ -716,7 +743,7 @@
     video.pause();
     video.hidden = true;
     video.removeAttribute('src');
-    if (!targetPath) { sampledBackgroundRGB = hexToRgb(settings.accent); if (settings.accentMode === 'background-rgb') applyAppearance(); return; }
+    if (!targetPath) return;
     if (root.frameAPI?.mediaExists) {
       try {
         const exists = await root.frameAPI.mediaExists(targetPath);
@@ -734,13 +761,11 @@
     const url = root.frameAPI?.mediaURL ? root.frameAPI.mediaURL(targetPath) : '';
     if (!url) return;
     if (targetKind === 'video') {
-      video.crossOrigin = 'anonymous';
       video.src = url;
       video.hidden = false;
       video.load();
       if (!settings.reduceMotion) video.play().catch(() => { });
     } else {
-      image.crossOrigin = 'anonymous';
       image.src = url;
       image.hidden = false;
     }
@@ -749,6 +774,7 @@
     settings = normalizeSettings({ ...settings, [key]: value });
     applyAppearance();
     if (key === 'backgroundPath' || key === 'backgroundKind') applyBackground();
+    if (key === 'backgroundPath' || key === 'backgroundKind' || key === 'accentMode') syncBackgroundSampler();
     safePersist();
   }
   function openCustomization() {
@@ -770,7 +796,7 @@
         const result = await root.frameAPI.selectCustomizationBackground();
         if (result?.canceled || !result?.filePath) return;
         settings = normalizeSettings({ ...settings, backgroundPath: result.filePath, backgroundName: result.name || result.filePath.split(/[\\/]/).pop(), backgroundKind: result.kind === 'video' ? 'video' : 'image' });
-        applyAppearance(); applyBackground(); safePersist();
+        applyAppearance(); applyBackground(); syncBackgroundSampler(); safePersist();
         const filename = $('#customBackgroundFilename');
         if (filename) filename.textContent = settings.backgroundName;
         return;
@@ -783,7 +809,7 @@
         if (!file || !path || !root.frameAPI?.mediaURL) return;
         const isVideo = file.type.startsWith('video/');
         settings = normalizeSettings({ ...settings, backgroundPath: path, backgroundName: file.name, backgroundKind: isVideo ? 'video' : 'image' });
-        applyAppearance(); applyBackground(); safePersist();
+        applyAppearance(); applyBackground(); syncBackgroundSampler(); safePersist();
       }, { once: true });
       input.click();
     } catch (error) {
@@ -792,8 +818,8 @@
     }
   }
   function resetCustomization() {
-    settings = { ...DEFAULTS };
-    applyAppearance(); applyBackground(); applyLanguage(); safePersist();
+    settings = normalizeSettings({ ...DEFAULTS });
+    applyAppearance(); applyBackground(); applyLanguage(); syncBackgroundSampler(); safePersist();
   }
   function bindRange(id, key, parse = Number) {
     const element = $('#' + id);
@@ -807,15 +833,11 @@
     $('#customLanguage')?.addEventListener('change', event => { setValue('language', event.target.value); applyLanguage(); });
     $('#customAccent')?.addEventListener('input', event => setValue('accent', event.target.value));
     $('#customAccentMode')?.addEventListener('change', event => { setValue('accentMode', event.target.value); sampleBackgroundPalette(true); });
+    for (const [id, index] of [['customAccentGradient1', 0], ['customAccentGradient2', 1], ['customAccentGradient3', 2]]) {
+      $('#' + id)?.addEventListener('input', event => { const gradient = normalizeAccentGradient(settings.accentGradient); gradient.colors[index] = validHex(event.target.value, gradient.colors[index]); setValue('accentGradient', gradient); });
+    }
+    $('#customAccentGradientAngle')?.addEventListener('input', event => { const gradient = normalizeAccentGradient(settings.accentGradient); gradient.angle = clamp(Number(event.target.value) || 0, -360, 360); setValue('accentGradient', gradient); });
     bindRange('customAccentSaturation', 'accentSaturation'); bindRange('customAccentLightness', 'accentLightness'); bindRange('customAccentSpeed', 'accentSpeed');
-    const gradientDialog=$('#accentGradientDialog');
-    const readGradientControls=()=>({angle:clamp($('#accentGradientAngle')?.value??settings.accentGradient.angle,0,360),stops:[1,2,3].map(i=>({position:clamp($(`#accentGradientPos${i}`)?.value??([0,50,100][i-1]),0,100),color:validHex($(`#accentGradientColor${i}`)?.value,DEFAULTS.accentGradient.stops[i-1].color)})).sort((a,b)=>a.position-b.position)});
-    const refreshGradientControls=()=>{const gradient=readGradientControls();const prev=$('#accentGradientDialogPreview');if(prev)prev.style.background=accentGradientPickerCSS(gradient);};
-    const openGradientDialog=()=>{const gradient=settings.accentGradient||DEFAULTS.accentGradient;if($('#accentGradientAngle'))$('#accentGradientAngle').value=String(gradient.angle);[1,2,3].forEach(i=>{const stop=gradient.stops[Math.min(i-1,gradient.stops.length-1)]||DEFAULTS.accentGradient.stops[i-1];if($(`#accentGradientColor${i}`))$(`#accentGradientColor${i}`).value=stop.color;if($(`#accentGradientPos${i}`))$(`#accentGradientPos${i}`).value=String(stop.position)});refreshGradientControls();gradientDialog?.showModal();};
-    $('#customAccentEditGradient')?.addEventListener('click',openGradientDialog);
-    ['accentGradientAngle','accentGradientColor1','accentGradientColor2','accentGradientColor3','accentGradientPos1','accentGradientPos2','accentGradientPos3'].forEach(id=>{$('#'+id)?.addEventListener('input',refreshGradientControls)});
-    $('#accentGradientApply')?.addEventListener('click',()=>{setValue('accentGradient',readGradientControls());setValue('accentMode','custom-gradient');gradientDialog?.close();});
-    $('#accentGradientCycle')?.addEventListener('click',()=>{setValue('accentMode','rgb');gradientDialog?.close();});
     $('#customTint')?.addEventListener('input', event => setValue('tint', event.target.value));
     $('#customBgFit')?.addEventListener('change', event => setValue('bgFit', event.target.value));
     for (const button of $$('[data-accent-preset]')) button.addEventListener('click', () => setValue('accent', button.dataset.accentPreset));
@@ -830,10 +852,9 @@
     });
     $('#customCompact')?.addEventListener('change', event => setValue('compact', event.target.checked));
     $('#chooseBackgroundBtn')?.addEventListener('click', chooseBackground);
-    $('#customBackgroundImage')?.addEventListener('load', () => sampleBackgroundPalette(true));
-    $('#customBackgroundVideo')?.addEventListener('loadeddata', () => sampleBackgroundPalette(true));
+    $('#customBackgroundImage')?.addEventListener('load', () => { sampleBackgroundPalette(true); syncBackgroundSampler(); });
+    $('#customBackgroundVideo')?.addEventListener('loadeddata', () => { sampleBackgroundPalette(true); syncBackgroundSampler(); });
     $('#customBackgroundVideo')?.addEventListener('timeupdate', () => sampleBackgroundPalette(false));
-    setInterval(() => { if (settings.accentMode==='background-rgb' && settings.backgroundPath && ((settings.backgroundKind==='image' && /\.gif$/i.test(settings.backgroundName)) || settings.backgroundKind==='video')) sampleBackgroundPalette(false); }, 1000);
     $('#customBackgroundImage')?.addEventListener('error', () => {
       if ($('#customBackgroundImage').hidden || !settings.backgroundPath) return;
       $('#customBackgroundImage').hidden = true;
@@ -848,7 +869,7 @@
     });
     $('#clearBackgroundBtn')?.addEventListener('click', () => {
       settings = normalizeSettings({ ...settings, backgroundPath: '', backgroundName: '', backgroundKind: 'image' });
-      applyAppearance(); applyBackground(); safePersist();
+      applyAppearance(); applyBackground(); syncBackgroundSampler(); safePersist();
     });
     $('#resetCustomizationBtn')?.addEventListener('click', () => {
       const accepted = root.confirm(settings.language === 'en-US' ? 'Reset all appearance settings?' : 'Restaurar todas as configurações visuais?');

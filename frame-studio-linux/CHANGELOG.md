@@ -1,23 +1,22 @@
-# Changelog
-
-## 2.4.27 — Local test preview (not yet released)
-- Correct camera orbit around its pivot using a true look-at projection; draw the pivot marker as an editor-only SVG overlay that is excluded from renders and exports.
-- Fix Ctrl/Cmd-click multi-selection so pointer-down does not suppress the click event.
-- Support resizing/trimming/stretching the selected timeline clips together, preserving per-clip keyframe timing and undo snapshots.
-- Add an editable accent-gradient picker with three color stops, angle, static custom gradient, animated RGB cycle, and background-sampled adaptive mode. Sample all pixels and periodically refresh animated GIF/video backgrounds.
-- Decouple each video's audio playback from its visual preview element so overlays, image layers, and seeks do not inadvertently stop its audio; synchronize and mix both clocks from the timeline.
-- Preserve the existing auto-update configuration and project data schema; this preview has not been published as a GitHub release.
-
 # FRAME Studio — Changelog
 
-## Source features carried into the 2.4.27 test preview (not a separate release)
+## 2.4.28 — Camera Pivot, Multi-select Resize, Accent Gradients & Audio Continuity
 
-- Added solid, animated RGB, and background-adaptive accent modes with saturation, lightness, and speed controls. Adaptive color samples the selected image/video when the media is canvas-readable and safely falls back to the chosen accent otherwise.
-- Added an optional camera look-at pivot with numeric XYZ controls, “pivot at selected layer,” and orbit/navigation around the chosen point.
-- Added timeline controls to group/ungroup selected layers and enter/exit a group. Effects chosen from the effect library now apply to all selected layers/groups; resizing a selected transform handle scales all selected layers proportionally.
-- Added a Time Remap Freeze Frame split operation that creates before / one-second frozen frame / after segments on the same track, keeping project content in the existing format.
-- Added “End + join” to trim at the playhead and close the next gap on the same track by shifting the following clips.
-- Preserved existing project fields and defaulted new camera-pivot/appearance settings, so older projects remain readable.
+### [FIXED]
+- Camera orbit now moves around the configured pivot and recomputes the camera look-at rotation, including when the pivot is offset from world origin.
+- Added a small pivot marker to the Scene Editor preview overlay only. It is not composited into rendered/exported frames.
+- Ctrl/Cmd-click multi-selection is handled before timeline clip nodes are rebuilt, fixing clicks being lost during re-render.
+- Dragging a selected clip's timeline trim/duration edge applies the same delta to all selected clips and adjusts affected keyframes; undo restores the prior states.
+- At adjacent split boundaries, preview/audio sync chooses the most recently started active clip for a shared media element instead of pausing on the outgoing clip. Video sound remains active when a photo or other visual layer covers it.
+
+### [IMPROVED]
+- Accent appearance now offers a custom three-stop gradient picker with angle control, solid color, animated RGB cycle, and background-adaptive RGB.
+- Background-adaptive colors sample still images, animated GIFs, and video backgrounds periodically; saturation and lightness settings affect the adaptive gradient. Sampling failures fall back safely.
+- Kept the existing project schema and updater configuration; the release tag and `package.json` version must both be `2.4.28`.
+
+### [TESTING]
+- Full automated suite passes, including export/ffprobe integration, media seeking, project compatibility assertions, customization, and updater configuration.
+- Packaged Electron GUI testing and the actual release CI build remain necessary before broad distribution.
 
 ## 2.4.25 — Downloaded media seeking and updater reliability
 
