@@ -69,7 +69,15 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run FRAME Studio regression suite
         working-directory: frame-studio-linux
-        run: npm test
+        shell: pwsh
+        run: |
+          # Set PATH in this exact step as well as GITHUB_PATH so the integration
+          # test can resolve ffmpeg/ffprobe even if runner path propagation varies.
+          $vendor = Join-Path $PWD "vendor\win"
+          $env:PATH = "$vendor;$env:PATH"
+          if (!(Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "FFmpeg is missing from PATH: $vendor" }
+          if (!(Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "FFprobe is missing from PATH: $vendor" }
+          npm test
       - name: Build auto-updatable NSIS installer
         working-directory: frame-studio-linux
         run: npm run build:win:installer
@@ -181,7 +189,15 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run FRAME Studio regression suite
         working-directory: frame-studio-linux
-        run: npm test
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Set PATH in this exact step as well as GITHUB_PATH to make the test
+          # binaries explicitly discoverable by child_process.spawn.
+          export PATH="$PWD/vendor/linux:$PATH"
+          command -v ffmpeg
+          command -v ffprobe
+          npm test
       - name: Build Linux packages
         working-directory: frame-studio-linux
         run: npm run build:linux
