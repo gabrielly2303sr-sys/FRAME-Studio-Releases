@@ -1,3 +1,14 @@
+# Changelog
+
+## 2.4.34 — Stability, RGB and export fallback
+
+- Removed the Community tab, Supabase runtime integration, config, SQL setup and Community test files.
+- Fixed the scene-editor grid leaking into the final camera composition.
+- Added animated RGB accent gradients using background-position animation while honoring reduced-motion preferences.
+- Added export-time voice effects (telephone, radio, echo and robot) for audio/video clips.
+- Added best-effort hardware H.264 encoding where supported, with automatic fallback to `libx264`.
+- Deferred speech-to-text subtitles, complete textured 3D model editing, lighting and R6 posing rather than shipping unstable partial implementations.
+
 # FRAME Studio — Changelog
 
 ## 2.4.33 — Release pipeline reliability

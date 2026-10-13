@@ -8,7 +8,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.33');
+assert.equal(pkg.version, '2.4.34');
 
 assert.match(html, /function scheduleScrubPreviewDraw\(/, 'scrub redraw is coalesced per animation frame');
 assert.match(html, /function rememberVideoPreviewFrame\(/, 'a decoded video frame is kept for seek gaps');

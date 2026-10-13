@@ -715,7 +715,8 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
       timeRemap: Array.isArray(clip?.timeRemap) ? clip.timeRemap.slice(0, 100).map(key => ({ time: Math.max(0, Math.min(1, Number(key?.time) || 0)), value: Math.max(0, Math.min(1, Number(key?.value) || 0)), mode: ['linear', 'smooth', 'hold'].includes(key?.mode) ? key.mode : 'linear', ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
       timeRemapDuration: Math.max(0, Math.min(43200, Number(clip?.timeRemapDuration) || 0)),
       fadeIn: Math.max(0, Math.min(30, Number(clip?.fadeIn) || 0)),
-      fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0))
+      fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0)),
+      voiceEffect: ['none', 'telephone', 'radio', 'echo', 'robot'].includes(clip?.voiceEffect) ? clip.voiceEffect : 'none'
     })) : [];
     const session = {
       id: randomUUID(), controller, tempDir, outputPath,
@@ -725,7 +726,7 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
       crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
       rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
       videoBitrate: Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)),
-      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'medium',
+      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'veryfast',
       audioBitrate: [96, 128, 160, 192, 256, 320].includes(Number(payload.audioBitrate)) ? Number(payload.audioBitrate) : 192,
       audioClips
     };
@@ -796,6 +797,7 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
     return {
       canceled: false, filePath: session.outputPath, size: metadata.size,
       duration: metadata.duration, videoCodec: metadata.videoCodec,
+      videoEncoder: metadata.videoEncoder, hardwareEncoding: metadata.hardwareEncoding,
       audioCodec: metadata.audioCodec, fps: metadata.fps,
       frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true
     };

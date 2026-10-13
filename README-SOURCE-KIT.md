@@ -1,20 +1,25 @@
-# FRAME Studio 2.4.33 — FRAME ID & Community Source Kit
+# FRAME Studio 2.4.34 — Source kit
 
-Este pacote incrementa a base FRAME Studio 2.4.33 para 2.4.33, adicionando um sistema social opcional. O editor continua funcionando sem conta ou conexão.
+Esta atualização prioriza compatibilidade e estabilidade em relação a recursos grandes que ainda precisariam de um motor 3D e reconhecimento de fala.
 
-## Recursos
-- FRAME ID: cadastro, login, logout, recuperação de senha e sessão persistente.
-- Perfil público: foto (PNG/JPEG/WebP/GIF, até 2 MB), nome, @usuário único, bio e pronomes.
-- Comunidade paginada, busca, total real de membros e presença online por heartbeat.
-- Pedidos de amizade, aceitar/recusar/cancelar, remover amizades, bloquear/desbloquear e denunciar perfis.
-- Supabase Auth, Postgres, Storage e políticas RLS documentadas em `frame-studio-linux/SUPABASE_SETUP.sql`.
-- Regressão para remoção de mídia da biblioteca e verificação da versão de release em CI.
+## Alterações desta versão
+- Remove totalmente a aba Comunidade, seus scripts de runtime, configuração, SQL e teste dedicado.
+- Evita desenhar a grade do editor de cena dentro da composição final da câmera.
+- Anima os gradientes RGB da interface novamente e mantém o respeito à configuração de movimento reduzido.
+- Adiciona modificadores não destrutivos na exportação de áudio: telefone, rádio, eco e robótico.
+- Tenta encoders H.264 por hardware disponíveis no FFmpeg; se falharem, usa `libx264`. O resultado depende do sistema, do driver e do FFmpeg.
+- Usa `veryfast` como preset de codificação por software padrão em novas instalações.
 
-## Preparação obrigatória do backend
-Crie um projeto Supabase, execute o SQL fornecido e configure apenas URL HTTPS + publishable/anon key em `frame-studio-linux/community-config.js`. Nunca incorpore uma `service_role` key. Até essa configuração, as funções sociais aparecem como desativadas, sem contadores falsos.
+## Recursos deliberadamente adiados
+Legendas automáticas com detecção de inglês e português brasileiro exigem um mecanismo de fala e um modelo de reconhecimento que não estão incluídos. A importação de modelos 3D texturizados, iluminação de cena e rig/posing R6 precisam de um sistema de renderização 3D real; para evitar interfaces incompletas e regressões, essas ideias não foram simuladas nesta versão.
 
-## Testes
-Na pasta `frame-studio-linux`: `npm install --no-audit --no-fund` e `npm test`. A suíte automatizada passou neste workspace. Os builds empacotados Windows/Linux e o fluxo real do Supabase ainda precisam de teste antes da release pública.
+## Testar e compilar
+Na pasta `frame-studio-linux`:
 
-## Publicação
-Siga `PUBLISH-2.4.33.md`. Este ZIP não cria uma release nem envia commits ao GitHub.
+```bash
+npm install
+npm test
+npm run build:linux:appimage
+```
+
+O ZIP é código-fonte, não um AppImage já compilado.
