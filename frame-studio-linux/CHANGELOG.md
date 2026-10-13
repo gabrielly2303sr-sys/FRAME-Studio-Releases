@@ -1,15 +1,28 @@
-# Changelog
+# FRAME Studio 2.4.35 — Extras Test Kit (beta)
+
+- Removed the Community/Supabase integration from the test package.
+- Camera scene-editor grid stays outside the camera-rendered output.
+- RGB-adaptive accent palette now blends between background samples rather than snapping to each new color.
+- Includes export-time telephone, radio, echo and robot voice effects.
+- Adds a best-effort hardware H.264 encoder path with software fallback.
+- Adds a beta OBJ-to-Canvas layer workflow, manual texture assignment for UV models, a simple block R6 test rig, basic face lighting and interpolated pose keyframes.
+- Adds optional local Whisper transcription to editable text clips. A local `whisper-cli`, model and FFmpeg are required; those assets are not bundled.
+
+## Limits of the 2.4.35 test kit
+- The 3D tool is a prototype, not a full 3D engine. OBJ only, with manually selected texture and UV coordinates; GLB/GLTF/FBX, Roblox model packages, accessory hierarchies, native skeletal editing and GPU 3D rendering are not included.
+- Whisper accepts `en` and `pt` language detections. `pt` does not identify the speaker's country or prove Brazilian Portuguese.
+- Voice effects are applied during export; preview playback remains original. Hardware encoding depends on FFmpeg, drivers and GPU support.
+- Automated tests pass, but the Electron UI, model texture import, Whisper setup, RGB transitions, project round-trip and exported output still need user testing.
+
+# FRAME Studio — Changelog
 
 ## 2.4.34 — Stability, RGB and export fallback
 
-- Removed the Community tab, Supabase runtime integration, config, SQL setup and Community test files.
-- Fixed the scene-editor grid leaking into the final camera composition.
-- Added animated RGB accent gradients using background-position animation while honoring reduced-motion preferences.
-- Added export-time voice effects (telephone, radio, echo and robot) for audio/video clips.
-- Added best-effort hardware H.264 encoding where supported, with automatic fallback to `libx264`.
-- Deferred speech-to-text subtitles, complete textured 3D model editing, lighting and R6 posing rather than shipping unstable partial implementations.
-
-# FRAME Studio — Changelog
+- Removed the Community tab and Supabase runtime assets from the application package.
+- Separated the scene-editor grid from the final camera render path.
+- Added animated RGB accent gradients and a best-effort hardware H.264 encoder path with `libx264` fallback.
+- Added export-time Telephone, Radio, Echo and Robot voice effects.
+- Speech transcription and the first OBJ/R6 prototype were left for the following test build; those remain beta functionality in 2.4.35.
 
 ## 2.4.33 — Release pipeline reliability
 

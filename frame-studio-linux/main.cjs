@@ -2,12 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol, session } = requir
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
 const { createMediaFileResponse } = require('./media-range.cjs');
+const { parseWhisperTranscript } = require('./subtitle-transcript.cjs');
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -1070,6 +1072,64 @@ ipcMain.handle('frame:select-media', async (event) => {
   });
   if (result.canceled) return { canceled: true };
   return { canceled: false, paths: result.filePaths };
+});
+
+
+ipcMain.handle('frame:select-whisper-executable', async (event) => {
+  assertTrustedSender(event);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const filters = process.platform === 'win32' ? [{ name: 'Whisper CLI', extensions: ['exe'] }] : [{ name: 'Whisper executable', extensions: ['*'] }];
+  const result = await dialog.showOpenDialog(win, { title: 'Choose whisper-cli executable', properties: ['openFile'], filters });
+  if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
+  const filePath = result.filePaths[0];
+  const stat = await fs.stat(filePath).catch(() => null);
+  if (!stat?.isFile()) throw new Error('Whisper executable not found.');
+  return { canceled: false, path: filePath };
+});
+
+ipcMain.handle('frame:select-whisper-model', async (event) => {
+  assertTrustedSender(event);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, { title: 'Choose local Whisper GGML/GGUF model', properties: ['openFile'], filters: [{ name: 'Whisper model', extensions: ['bin', 'gguf', 'ggml'] }, { name: 'All files', extensions: ['*'] }] });
+  if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
+  const filePath = result.filePaths[0];
+  const stat = await fs.stat(filePath).catch(() => null);
+  if (!stat?.isFile() || stat.size < 1024 * 1024) throw new Error('The selected file does not look like a Whisper model.');
+  return { canceled: false, path: filePath };
+});
+
+ipcMain.handle('frame:transcribe-audio', async (event, payload) => {
+  assertTrustedSender(event);
+  const sourcePath = payload?.path, whisperPath = payload?.whisperPath, modelPath = payload?.modelPath;
+  for (const [label, value] of [['audio/video', sourcePath], ['whisper-cli', whisperPath], ['Whisper model', modelPath]]) {
+    if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error(`Invalid ${label} path.`);
+    const stat = await fs.stat(value).catch(() => null);
+    if (!stat?.isFile()) throw new Error(`${label} file does not exist.`);
+  }
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'frame-whisper-'));
+  const wavPath = path.join(tempDir, 'source-16khz.wav');
+  const outputBase = path.join(tempDir, 'transcript');
+  const run = (command, args, options = {}) => new Promise((resolve, reject) => {
+    let child, stderr = '', settled = false;
+    const finish = (fn, value) => { if (settled) return; settled = true; fn(value); };
+    try { child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true }); }
+    catch (error) { finish(reject, error); return; }
+    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-12000); });
+    const timeout = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} finish(reject, new Error(`${options.label || 'Process'} timed out.`)); }, options.timeout || 45 * 60 * 1000);
+    child.once('error', error => { clearTimeout(timeout); finish(reject, new Error(`${options.label || 'Process'} could not start: ${error.message}`)); });
+    child.once('close', code => { clearTimeout(timeout); if (code !== 0) return finish(reject, new Error(stderr.trim() || `${options.label || 'Process'} exited with code ${code}`)); finish(resolve); });
+  });
+  try {
+    const ffmpeg = mediaToolCommand('ffmpeg');
+    if (!ffmpeg) throw new Error(missingBundledToolMessage('ffmpeg'));
+    await run(ffmpeg, ['-y', '-v', 'error', '-i', sourcePath, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], { label: 'FFmpeg audio extraction', timeout: 20 * 60 * 1000 });
+    await run(whisperPath, ['-m', modelPath, '-f', wavPath, '-l', 'auto', '-oj', '-of', outputBase, '--no-gpu'], { label: 'Whisper transcription' });
+    const jsonPath = `${outputBase}.json`;
+    const raw = JSON.parse(await fs.readFile(jsonPath, 'utf8'));
+    return parseWhisperTranscript(raw);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 });
 
 ipcMain.handle('frame:select-custom-background', async (event) => {

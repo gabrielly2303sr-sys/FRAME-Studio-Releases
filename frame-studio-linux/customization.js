@@ -617,6 +617,35 @@
   }
   let sampledBackgroundRGB = null;
   let lastBackgroundSampleAt = 0;
+  let backgroundPaletteTransition = 0;
+  function transitionBackgroundPalette(next) {
+    if (!next || ![next.r, next.g, next.b].every(Number.isFinite)) return;
+    const from = sampledBackgroundRGB ? { ...sampledBackgroundRGB } : { ...next };
+    const changed = Math.max(Math.abs(from.r-next.r), Math.abs(from.g-next.g), Math.abs(from.b-next.b));
+    const token = ++backgroundPaletteTransition;
+    if (!sampledBackgroundRGB || settings.reduceMotion || changed < 2 || typeof requestAnimationFrame !== 'function') {
+      sampledBackgroundRGB = { ...next };
+      if (settings.accentMode === 'background-rgb') applyAppearance();
+      return;
+    }
+    const started = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const duration = 420;
+    const tick = (now) => {
+      if (token !== backgroundPaletteTransition) return;
+      const progress = Math.min(1, Math.max(0, (now - started) / duration));
+      const eased = progress * progress * (3 - 2 * progress);
+      sampledBackgroundRGB = {
+        r: from.r + (next.r - from.r) * eased,
+        g: from.g + (next.g - from.g) * eased,
+        b: from.b + (next.b - from.b) * eased
+      };
+      if (settings.accentMode === 'background-rgb') {
+        document.documentElement.style.setProperty('--accent-fill', generatedAccentGradient());
+      }
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
   function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -651,8 +680,8 @@
         if (max - min < 12) continue;
         r += pixels[i]; g += pixels[i + 1]; b += pixels[i + 2]; count++;
       }
-      if (count) sampledBackgroundRGB = { r: r / count, g: g / count, b: b / count };
-      if (settings.accentMode === 'background-rgb') applyAppearance();
+      if (count) transitionBackgroundPalette({ r: r / count, g: g / count, b: b / count });
+      else if (settings.accentMode === 'background-rgb') applyAppearance();
     } catch {
       // File/protocol codecs may disallow canvas sampling. The chosen accent is the safe fallback.
     }

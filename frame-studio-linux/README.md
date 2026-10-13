@@ -1,4 +1,4 @@
-# FRAME Studio 2.4.34
+# FRAME Studio 2.4.35 Extras Test
 
 FRAME Studio is a local-first video editor. This source package contains the Electron app, media pipeline and platform packaging scripts. The Community/Supabase tab has been removed.
 

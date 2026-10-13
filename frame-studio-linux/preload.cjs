@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('frameAPI', {
     return () => ipcRenderer.removeListener('frame:youtube-download-progress', listener);
   },
   selectMediaFiles: () => ipcRenderer.invoke('frame:select-media'),
+  selectWhisperExecutable: () => ipcRenderer.invoke('frame:select-whisper-executable'),
+  selectWhisperModel: () => ipcRenderer.invoke('frame:select-whisper-model'),
+  transcribeAudio: (payload) => ipcRenderer.invoke('frame:transcribe-audio', payload),
   selectCustomizationBackground: () => ipcRenderer.invoke('frame:select-custom-background'),
   importFontsZip: () => ipcRenderer.invoke('frame:import-fonts-zip'),
   listSystemFonts: () => ipcRenderer.invoke('frame:list-system-fonts'),
