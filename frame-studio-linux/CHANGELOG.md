@@ -1,3 +1,22 @@
+# FRAME Studio Changelog
+
+## 2.4.30 — GPU export, responsive playhead and persistent groups
+
+### [IMPROVED]
+- MP4 export now detects supported FFmpeg hardware encoders and prefers GPU encoding when a compatible encoder/device is available: VAAPI on Linux, NVENC/Quick Sync/AMF on Windows, and VideoToolbox on macOS builds. Failed GPU attempts automatically fall back to `libx264` so exports still work on machines without a supported GPU path.
+- The export status now reports the encoder actually used and whether it was hardware-accelerated.
+- Timeline scrubbing batches media seeking and preview drawing to one animation frame, reducing repeated renderer work while dragging the playhead.
+- Removed the recursive animation-frame redraw loop while videos are seeking; the decoder's `seeked`/data events drive the next refresh instead.
+
+### [FIXED]
+- Project loading, autosave restoration and undo snapshots no longer delete group membership, group transforms, masks, collapsed state or active group view. Older grouped projects missing the group table reconstruct a minimal group rather than losing the link.
+- Added regressions for hardware encoder command construction, GPU upload filters, preview scrub coalescing and group persistence.
+
+### [COMPATIBILITY]
+- Preserved the existing project schema; projects from earlier 2.4.x versions do not require conversion.
+- Windows NSIS and Linux AppImage remain the supported `electron-updater` channels. Older portable ZIP and DEB/RPM installs cannot be retroactively made auto-updating by a new release alone; they must first move to a supported installer channel.
+- The CI workflow requires the release tag and `frame-studio-linux/package.json` to match exactly. Publish as `v2.4.30` only if that tag has not already been used for an existing public release; an already-published `2.4.30` must be followed by `2.4.31` for clients to recognize it as newer.
+
 # FRAME Studio — Changelog
 
 ## 2.4.28 — Camera Pivot, Multi-select Resize, Accent Gradients & Audio Continuity

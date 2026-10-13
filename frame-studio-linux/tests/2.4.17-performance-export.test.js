@@ -7,7 +7,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const media = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.28');
+assert.equal(pkg.version, '2.4.30');
 assert.match(html, /function schedulePreviewRefinement\(/);
 assert.match(html, /function saveScrubFrameSnapshot\(/);
 assert.match(html, /FAST PREVIEW/);
@@ -29,7 +29,8 @@ assert.match(html, /id="exportaudiobitrate"/);
 assert.match(html, /rateMode:exportRateMode,videoBitrate:exportVideoBitrate,encoderPreset:exportEncoderPreset,audioBitrate:exportAudioBitrate/);
 assert.match(main, /encoderPreset: \['veryfast', 'fast', 'medium', 'slow', 'slower'\]/);
 assert.match(main, /rateMode: session\.rateMode/);
-assert.match(media, /safeRateMode === 'bitrate'/);
+assert.match(media, /settings\.rateMode === 'bitrate'/);
+assert.match(media, /rateMode: safeRateMode, videoBitrate: safeVideoBitrate, encoderPreset: safeEncoderPreset, fps: safeFps/);
 assert.match(media, /safeVideoBitrate/);
 assert.match(media, /safeAudioBitrate/);
 assert.match(media, /safeEncoderPreset/);

@@ -1,17 +1,17 @@
-# FRAME Studio 2.4.28
+# FRAME Studio 2.4.30 — GPU Export, Faster Preview & Grouping Fixes
 
 ### 🐛 Correções
-- A órbita da câmera respeita o pivot configurado e mantém a câmera apontada para ele. O ponto do pivot aparece apenas no preview do Scene Editor e não é exportado.
-- Ctrl/Cmd-clique funciona para selecionar múltiplos clipes; redimensionar a borda de um clipe selecionado redimensiona todos os selecionados.
-- Na troca entre clipes adjacentes do mesmo arquivo, o sincronizador escolhe o clipe ativo mais recente, evitando que o clipe anterior pause o vídeo/áudio no corte. O som do vídeo continua quando uma foto ou outra camada visual cobre a imagem.
+- O agrupamento mantém os IDs dos clipes, transformações, máscaras, subgrupos e estado recolhido ao abrir projetos, restaurar autosaves e desfazer/refazer ações.
+- O scrubbing da timeline deixa de disparar seeks e redesenhos redundantes em cada evento do mouse; os frames são agrupados por frame de animação.
+- Foi removido o ciclo de redraw contínuo enquanto um vídeo aguarda o seek.
 
-### ✨ Adicionado / Melhorado
-- Seletor de gradiente do acento com três cores e ângulo; modos Cor sólida, Gradiente personalizado, RGB cycle e RGB adaptativo ao fundo.
-- Amostragem adaptativa da cor para imagem estática, GIF animado e vídeo de fundo, com controles de saturação e luminosidade.
-- Formato dos projetos e configuração do atualizador preservados.
-- A biblioteca de mídia agora permite remover um item do projeto e os clipes ligados a ele sem excluir o arquivo original do disco.
+### ⚡ Melhorias
+- A exportação MP4 tenta usar codificação por hardware quando o FFmpeg e o dispositivo oferecem suporte: VAAPI no Linux, NVENC/Quick Sync/AMF no Windows e VideoToolbox no macOS.
+- Se o driver, encoder ou hardware não aceitar a exportação, o FRAME Studio tenta o próximo encoder e por fim usa `libx264` por CPU para não bloquear a exportação.
+- O status do render mostra qual encoder foi realmente usado e se houve aceleração por GPU.
 
-### 🧩 Compatibilidade
-- `package.json` version e tag GitHub devem corresponder exatamente: `2.4.28` / `v2.4.28`.
-- O workflow do GitHub Actions deve gerar os pacotes e metadados de atualização. Auto-update deve ser validado nos instaladores suportados Windows NSIS e Linux AppImage.
-- Testes automatizados passaram; teste manual com o app empacotado continua necessário.
+### 🧩 Compatibilidade e atualização
+- O formato dos projetos continua compatível com projetos 2.4.x; projetos existentes não exigem conversão.
+- `frame-studio-linux/package.json` deve ter versão `2.4.30`, e a release no GitHub deve usar a tag `v2.4.30`.
+- As atualizações automáticas são suportadas pelo instalador NSIS do Windows e AppImage do Linux. Instalações portáteis/ZIP, DEB e RPM não usam o mesmo fluxo de substituição automática.
+- Testes automatizados passaram neste workspace. A compilação real do GitHub Actions e a confirmação de encoding na GPU precisam ser verificadas no release e no hardware de destino.

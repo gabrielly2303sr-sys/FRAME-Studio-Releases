@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.28', 'package version');
+assert.equal(pkg.version, '2.4.30', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -58,8 +58,8 @@ assert.match(html, /id="projectfps"/, 'as configurações devem expor FPS do pro
 const fpsOptions = html.match(/<select id="projectfps">([\s\S]*?)<\/select>/)?.[1] || '';
 for (const fps of ['24','25','30','50','60']) assert.ok(fpsOptions.includes(`<option>${fps}</option>`) || fpsOptions.includes(`<option selected>${fps}</option>`) || fpsOptions.includes(`<option selected="">${fps}</option>`), `opção ${fps} FPS deve existir`);
 assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /function volumeAutomationExpression/, 'keyframes de volume têm uma expressão dedicada no FFmpeg');
-assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /'-crf', String\(safeCrf\)/, 'a qualidade selecionada deve chegar ao FFmpeg');
-assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /'-r', String\(safeFps\)/, 'FPS dinâmico deve chegar ao FFmpeg');
+assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /'-crf', String\(crf\)/, 'a qualidade selecionada deve chegar ao FFmpeg no encoder por software');
+assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /'-r', String\(settings\.fps\)/, 'FPS dinâmico deve chegar ao FFmpeg em todos os encoders');
 assert.match(main, /frame:write-export-frame/, 'cada frame é enviado por uma rota IPC explícita');
 assert.match(renderer, /function prepareVideoFramesAt\(t\)/, 'cada timestamp deve aguardar as fontes de vídeo ativas');
 assert.match(renderer, /document\.createElement\('canvas'\)/, 'a renderização deve usar um canvas não ligado ao preview visível');

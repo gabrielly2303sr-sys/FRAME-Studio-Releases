@@ -96,6 +96,147 @@ function runProcess(binary, args, options = {}) {
   });
 }
 
+async function findVaapiDevice() {
+  const candidates = [process.env.FRAME_VAAPI_DEVICE, '/dev/dri/renderD128', '/dev/dri/renderD129', '/dev/dri/renderD130', '/dev/dri/card0'].filter(Boolean);
+  for (const candidate of candidates) {
+    if (!path.isAbsolute(candidate)) continue;
+    try { await fs.access(candidate); return candidate; } catch {}
+  }
+  return null;
+}
+
+async function drmVendorForDevice(device) {
+  if (!device || !/^\/dev\/dri\/(?:renderD\d+|card\d+)$/.test(device)) return null;
+  const name = path.basename(device);
+  try {
+    return (await fs.readFile(`/sys/class/drm/${name}/device/vendor`, 'utf8')).trim().toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+async function deviceExists(device) {
+  try { await fs.access(device); return true; } catch { return false; }
+}
+
+async function availableVideoEncoders(ffmpegPath, options = {}) {
+  try {
+    const result = await runProcess(ffmpegPath, ['-hide_banner', '-encoders'], {
+      signal: options.signal, onProcess: options.onProcess, kind: 'ffmpeg'
+    });
+    const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+    return new Set([...text.matchAll(/\b(h264_[a-z0-9_]+|libx264)\b/gi)].map(match => match[1].toLowerCase()));
+  } catch (error) {
+    if (options.signal?.aborted || error?.code === 'EXPORT_CANCELED') throw new ExportCanceledError();
+    // The actual encode attempt below will produce the actionable missing-FFmpeg error.
+    return new Set();
+  }
+}
+
+async function getEncoderCandidates(ffmpegPath, options = {}) {
+  const available = await availableVideoEncoders(ffmpegPath, options);
+  if (options.signal?.aborted) throw new ExportCanceledError();
+  const candidates = [];
+  const add = (encoder, hardware = true, extra = {}) => {
+    if (available.has(encoder)) candidates.push({ encoder, hardware, ...extra });
+  };
+  if (process.platform === 'win32') {
+    add('h264_nvenc');
+    add('h264_qsv');
+    add('h264_amf');
+  } else if (process.platform === 'darwin') {
+    add('h264_videotoolbox');
+  } else {
+    // On Linux, prefer VAAPI for AMD/Intel GPUs. Avoid blindly launching NVIDIA
+    // or Intel encoders on unrelated systems, which can add seconds to each export.
+    const device = await findVaapiDevice();
+    const vendor = await drmVendorForDevice(device);
+    if (available.has('h264_vaapi') && device) add('h264_vaapi', true, { vaapiDevice: device });
+    if (available.has('h264_nvenc') && (vendor === '0x10de' || await deviceExists('/dev/nvidia0'))) add('h264_nvenc');
+    if (available.has('h264_qsv') && (vendor === '0x8086' || (!vendor && device))) add('h264_qsv');
+  }
+  if (available.has('libx264') || candidates.length === 0) candidates.push({ encoder: 'libx264', hardware: false });
+  return candidates;
+}
+
+function rateControlArgs(candidate, settings = {}) {
+  const crf = Math.max(16, Math.min(28, Math.round(Number(settings.crf) || 18)));
+  const mode = settings.rateMode === 'bitrate' ? 'bitrate' : 'crf';
+  const bitrate = Math.max(2, Math.min(100, Number(settings.videoBitrate) || 12));
+  const rateArgs = () => ['-b:v', `${bitrate}M`, '-maxrate', `${Math.round(bitrate * 1.35)}M`, '-bufsize', `${Math.round(bitrate * 2)}M`];
+  switch (candidate.encoder) {
+    case 'h264_nvenc':
+      return mode === 'bitrate'
+        ? ['-rc', 'vbr', '-preset', 'p4', ...rateArgs()]
+        : ['-rc', 'vbr', '-preset', 'p4', '-cq', String(crf), '-b:v', '0'];
+    case 'h264_qsv':
+      return mode === 'bitrate'
+        ? ['-preset', 'medium', ...rateArgs()]
+        : ['-preset', 'medium', '-global_quality', String(crf)];
+    case 'h264_amf':
+      return mode === 'bitrate'
+        ? ['-quality', 'speed', '-rc', 'vbr_peak', ...rateArgs()]
+        : ['-quality', 'speed', '-rc', 'cqp', '-qp_i', String(crf), '-qp_p', String(crf), '-qp_b', String(crf)];
+    case 'h264_vaapi':
+      return mode === 'bitrate' ? rateArgs() : ['-qp', String(crf)];
+    case 'h264_videotoolbox':
+      return mode === 'bitrate'
+        ? rateArgs()
+        : ['-q:v', String(Math.max(20, Math.min(95, 100 - (crf - 16) * 5)))];
+    default:
+      return mode === 'bitrate'
+        ? ['-preset', settings.encoderPreset || 'medium', ...rateArgs()]
+        : ['-preset', settings.encoderPreset || 'medium', '-crf', String(crf)];
+  }
+}
+
+function videoEncoderOutputArgs(candidate, settings = {}) {
+  const evenScale = 'scale=trunc(iw/2)*2:trunc(ih/2)*2';
+  const args = [];
+  if (candidate.encoder === 'libx264') args.push('-c:v', 'libx264');
+  else args.push('-c:v', candidate.encoder);
+  if (candidate.encoder === 'h264_vaapi') args.push('-vf', `${evenScale},format=nv12,hwupload`);
+  else args.push('-vf', evenScale);
+  args.push(...rateControlArgs(candidate, settings));
+  args.push('-r', String(settings.fps), '-fps_mode', 'cfr');
+  if (candidate.encoder === 'h264_vaapi') {
+    // VAAPI encodes hardware surfaces; don't force a software output pixel format.
+  } else if (candidate.encoder === 'h264_qsv') args.push('-pix_fmt', 'nv12');
+  else args.push('-pix_fmt', 'yuv420p');
+  return args;
+}
+
+function withEncoderInputOptions(args, candidate) {
+  if (!candidate.vaapiDevice) return args.slice();
+  const copy = args.slice();
+  const insertAt = copy[1] === '-y' ? 2 : 0;
+  copy.splice(insertAt, 0, '-vaapi_device', candidate.vaapiDevice);
+  return copy;
+}
+
+async function encodeWithFallback(options = {}) {
+  const { ffmpegPath, baseArgs, outputPath, makeOutputArgs, signal, onProcess, onProgress } = options;
+  const candidates = await getEncoderCandidates(ffmpegPath, { signal, onProcess });
+  let lastError = null;
+  for (const candidate of candidates) {
+    if (signal?.aborted) throw new ExportCanceledError();
+    const args = withEncoderInputOptions(baseArgs, candidate).concat(
+      makeOutputArgs(candidate),
+      ['-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath]
+    );
+    try {
+      await runProcess(ffmpegPath, args, { signal, kind: 'ffmpeg', onProcess, onProgress });
+      return { encoder: candidate.encoder, hardwareAcceleration: !!candidate.hardware };
+    } catch (error) {
+      await fs.rm(outputPath, { force: true }).catch(() => {});
+      if (signal?.aborted || error?.code === 'EXPORT_CANCELED') throw new ExportCanceledError();
+      lastError = error;
+      if (candidate.hardware) console.warn(`FRAME Studio: hardware encoder ${candidate.encoder} failed; trying the next encoder.`, error?.message || error);
+    }
+  }
+  throw lastError || new Error('No supported H.264 encoder is available in this FFmpeg build.');
+}
+
 async function probeMedia(filePath, options = {}) {
   const ffprobePath = resolveToolPath('ffprobe', options.ffprobePath);
   const { stdout } = await runProcess(ffprobePath, [
@@ -242,24 +383,15 @@ async function transcodeWebmToMp4(options) {
     const hasAudio = inputProbe.streams.some(stream => stream.codec_type === 'audio');
     const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));
     const safeCrf = Math.max(16, Math.min(28, Math.round(Number(crf) || 18)));
-    const args = [
-      '-hide_banner', '-y', '-i', inputPath,
-      '-map', '0:v:0'
-    ];
-    if (hasAudio) args.push('-map', '0:a:0');
-    args.push(
-      '-map_metadata', '-1',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(safeCrf),
-      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-      '-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p'
-    );
-    if (hasAudio) args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
-    args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
-
-    await runProcess(ffmpegPath, args, {
-      signal,
-      kind: 'ffmpeg',
-      onProcess,
+    const baseArgs = ['-hide_banner', '-y', '-i', inputPath, '-map', '0:v:0'];
+    if (hasAudio) baseArgs.push('-map', '0:a:0');
+    baseArgs.push('-map_metadata', '-1');
+    const encoder = await encodeWithFallback({
+      ffmpegPath, baseArgs, outputPath, signal, onProcess,
+      makeOutputArgs: candidate => [
+        ...videoEncoderOutputArgs(candidate, { crf: safeCrf, fps: safeFps, rateMode: 'crf', encoderPreset: 'veryfast' }),
+        ...(hasAudio ? ['-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0'] : [])
+      ],
       onProgress: (seconds, ended) => {
         if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: expectedDuration, duration: expectedDuration });
         const denominator = expectedDuration > 0 ? expectedDuration : inputProbe.duration;
@@ -289,7 +421,9 @@ async function transcodeWebmToMp4(options) {
       height: outputVideo.height,
       fps: safeFps,
       inputHasAudio: hasAudio,
-      inputVideoCodec: inputVideo.codec_name || null
+      inputVideoCodec: inputVideo.codec_name || null,
+      encoder: encoder.encoder,
+      hardwareAcceleration: encoder.hardwareAcceleration
     };
   } catch (error) {
     await fs.rm(outputPath, { force: true }).catch(() => {});
@@ -540,26 +674,16 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
   args.push('-map', '0:v:0');
   if (hasAudio) args.push('-map', '[aout]');
-  args.push(
-    '-frames:v', String(safeFrameCount),
-    '-t', duration.toFixed(6),
-    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    '-c:v', 'libx264', '-preset', safeEncoderPreset
-  );
-  if (safeRateMode === 'bitrate') {
-    args.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
-  } else {
-    args.push('-crf', String(safeCrf));
-  }
-  args.push('-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p');
-  if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2');
-  args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
+  args.push('-frames:v', String(safeFrameCount), '-t', duration.toFixed(6));
+  const encoderSettings = { crf: safeCrf, rateMode: safeRateMode, videoBitrate: safeVideoBitrate, encoderPreset: safeEncoderPreset, fps: safeFps };
 
   try {
-    await runProcess(ffmpegPath, args, {
-      signal,
-      kind: 'ffmpeg',
-      onProcess,
+    const encoder = await encodeWithFallback({
+      ffmpegPath, baseArgs: args, outputPath, signal, onProcess,
+      makeOutputArgs: candidate => [
+        ...videoEncoderOutputArgs(candidate, encoderSettings),
+        ...(hasAudio ? ['-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2'] : [])
+      ],
       onProgress: (seconds, ended) => {
         if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: duration, duration });
         const progress = duration > 0 ? Math.max(0, Math.min(98, seconds / duration * 100)) : 0;
@@ -602,7 +726,9 @@ async function renderFrameSequenceToMp4(options = {}) {
       audioBitrate: safeAudioBitrate,
       frameCount: Number.isFinite(reportedFrameCount) && reportedFrameCount > 0 ? reportedFrameCount : safeFrameCount,
       deterministicFrames: true,
-      inputAudioClips: audioLabels.length
+      inputAudioClips: audioLabels.length,
+      encoder: encoder.encoder,
+      hardwareAcceleration: encoder.hardwareAcceleration
     };
   } catch (error) {
     await fs.rm(outputPath, { force: true }).catch(() => {});
@@ -610,5 +736,5 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
 }
 
-module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
+module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments, availableVideoEncoders, getEncoderCandidates, videoEncoderOutputArgs, rateControlArgs, findVaapiDevice, drmVendorForDevice };
 

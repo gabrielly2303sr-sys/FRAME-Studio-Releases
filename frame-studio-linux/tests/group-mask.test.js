@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.28');
+assert.equal(pkg.version, '2.4.30');
 for (const id of ['groupclips','groupmask','ungroupclips','selectgroup','togglegroup','grouptransform','groupmasktoggle']) {
   assert.doesNotMatch(html, new RegExp(`id=["']${id}["']`), `grouping UI control ${id} should be removed`);
 }
@@ -31,12 +31,19 @@ function functionSource(name) {
 const migration = vm.runInNewContext(`(${functionSource('stripLegacyGroupMetadata')})`);
 const data = {format:'frameproj',groups:[{id:'g1',name:'Old group',parentId:null,transform:{x:50,y:20,scaleX:125,scaleY:90,rotation:5,opacity:80},maskMode:'alpha'}],clips:[{id:'a',groupId:'g1',groupName:'Old group',groupParentId:null},{id:'b'}],selectedGroupId:'g1',activeGroupViewId:'g1',collapsedGroups:['g1']};
 migration(data);
-assert.equal(data.groups.length, 0);
-assert.equal(data.layerGroups.length, 0);
-assert.equal(data.selectedGroupId, null);
-assert.equal(data.activeGroupViewId, null);
-assert.equal(data.clips[0].groupId, undefined);
-assert.equal(data.clips[0].groupName, undefined);
-assert.equal(data.clips[0].legacyGroupTransforms[0].x, 50);
-assert.equal(data.clips[0].legacyGroupTransforms[0].opacity, 80);
-console.log('FRAME Studio 2.4.16 legacy grouping removal tests: OK');
+assert.equal(data.groups.length, 1, 'opening a project must preserve its group objects');
+assert.equal(data.groups[0].id, 'g1');
+assert.equal(data.groups[0].transform.x, 50, 'group transforms must survive project load');
+assert.equal(data.groups[0].maskMode, 'alpha', 'group masks must survive project load');
+assert.equal(data.selectedGroupId, 'g1');
+assert.equal(data.activeGroupViewId, 'g1');
+assert.deepEqual(data.collapsedGroups, ['g1']);
+assert.equal(data.clips[0].groupId, 'g1', 'grouped clips must remain members after project load');
+assert.equal(data.clips[0].groupName, 'Old group');
+assert.ok(!data.clips[0].legacyGroupTransforms, 'new-format groups must not be flattened into legacy transforms');
+const legacy = { format: 'frameproj', clips: [{ id: 'x', groupId: 'missing-group', groupName: 'Recovered Group' }] };
+migration(legacy);
+assert.equal(legacy.groups.length, 1, 'old projects without a groups array should reconstruct a minimal group');
+assert.equal(legacy.groups[0].id, 'missing-group');
+assert.equal(legacy.clips[0].groupId, 'missing-group');
+console.log('FRAME Studio 2.4.30 group persistence regression tests: OK');

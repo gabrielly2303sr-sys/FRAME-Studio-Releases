@@ -1,17 +1,23 @@
-# FRAME Studio 2.4.28 — Feature Update Source Kit
+# FRAME Studio 2.4.30 — Release Source Kit
 
-This archive updates the supplied FRAME Studio source in place; it is not a replacement editor or prototype. The release version, UI labels, automated version assertions, Linux installer fallback, and test entry point are aligned to `2.4.28`.
+Este arquivo é um pacote de código-fonte para aplicar ao repositório existente do FRAME Studio; não é um instalador nem um editor independente. Compare/mescle com o branch remoto atual antes de sobrescrever arquivos, para preservar commits mais recentes.
 
-## Implemented fixes
-- Camera orbit now rotates around the selected pivot and updates its look-at rotation; the pivot dot is an editor-only Scene Editor preview gizmo and is not part of rendered/exported frames.
-- Ctrl/Cmd-click multi-selection is captured before timeline clip elements are recreated.
-- Resizing a clip edge applies the same delta to all currently selected clips, with per-clip clamps and keyframe adjustment.
-- Accent appearance supports a saved custom gradient, RGB cycle, and background-adaptive accent sampling from image/GIF/video backgrounds with saturation/lightness controls.
-- Media synchronization chooses the most suitable active timeline clip if an asset is used by adjacent/overlapping clips and continues to sync any active video audio regardless of which visual layer is on top.
-- Restored `removeAssetFromProject` and a visible media-bin removal action. It removes linked timeline clips, cleans media caches and temporary object URLs, persists autosave, and never deletes the original source file.
+## Foco desta versão
+- Exportação H.264 tenta os encoders de hardware disponíveis (VAAPI em Linux com GPU compatível, NVENC/Quick Sync/AMF no Windows e VideoToolbox no macOS) e recorre ao próximo encoder ou `libx264` se o hardware/driver não funcionar. O status do render informa o encoder usado.
+- Preview ao arrastar o playhead agrupa sincronização e desenho por frame de animação e elimina o ciclo de redesenho contínuo durante seeks pendentes.
+- Agrupamento preserva IDs dos clipes, transformações, máscaras, subgrupos e estado recolhido/ativo ao abrir projetos, restaurar autosaves e executar undo/redo; projetos antigos com group IDs sem uma tabela de grupos recuperam um grupo mínimo.
+- Mantém as correções anteriores de órbita/pivot da câmera, multi-seleção, redimensionamento em conjunto, cores adaptativas, biblioteca de mídia e ferramentas empacotadas.
 
-## Validation
-Run `npm install --no-audit --no-fund` then `npm test` from `frame-studio-linux`. Automated checks cover syntax/logic/regressions; a full Electron GUI test and release CI build are still needed before publication.
+## Validação
+`npm test` passou no workspace de edição, incluindo exportação de MP4 verificada com ffprobe, cancelamento, regressões de timeline, seeking, persistência de grupos e configuração do atualizador. O ambiente não expôs uma GPU, portanto o caminho de fallback foi exercitado, mas o encoding físico por GPU ainda precisa ser confirmado num computador com driver compatível. Também falta a build final do Electron e o teste visual no app empacotado.
 
-## Release safety
-Use tag `v2.4.28` only with package version `2.4.28`. This archive cannot inspect or merge commits that may exist on the remote repository; before pushing, compare it with the current `main` branch and keep any newer fixes. The GitHub release workflow builds the platform packages and upload metadata (`latest.yml` / `latest-linux.yml`) used by auto-update.
+Execute a partir de `frame-studio-linux`:
+```sh
+npm install --no-audit --no-fund
+npm test
+```
+
+## Publicação e auto-update
+- A versão no `frame-studio-linux/package.json` e a tag da release precisam coincidir exatamente (`2.4.30` / `v2.4.30`). Só publique `v2.4.30` se ela ainda não tiver sido usada e se for superior à release estável mais recente.
+- A workflow executa quando a release no GitHub é publicada e constrói/associa instaladores e metadados (`latest.yml` para Windows NSIS e `latest-linux.yml` para Linux AppImage).
+- Instalações Windows via NSIS e Linux via AppImage são os canais com atualização automática. ZIP/portátil e instalações Linux por DEB/RPM precisam de um caminho de atualização manual; um novo release não pode adicionar retroativamente um atualizador a binários antigos que nunca tiveram esse código.
