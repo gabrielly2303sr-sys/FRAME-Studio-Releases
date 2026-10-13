@@ -13,9 +13,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Verify release tag matches package version
@@ -52,6 +52,16 @@ jobs:
         working-directory: frame-studio-linux
         shell: pwsh
         run: node scripts/verify-bundled-tools.cjs vendor/win --platform win32
+      - name: Configure bundled media tools for tests and export
+        working-directory: frame-studio-linux
+        shell: pwsh
+        run: |
+          $vendor = (Resolve-Path "vendor\win").Path
+          $ffmpeg = (Resolve-Path (Join-Path $vendor "ffmpeg.exe")).Path
+          $ffprobe = (Resolve-Path (Join-Path $vendor "ffprobe.exe")).Path
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $vendor
+          "FRAME_FFMPEG_PATH=$ffmpeg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FRAME_FFPROBE_PATH=$ffprobe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Run media tool validation regression tests
         working-directory: frame-studio-linux
         shell: pwsh
@@ -117,9 +127,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Verify release tag matches package version
@@ -162,6 +172,16 @@ jobs:
       - name: Verify downloaded Linux tools run with their correct arguments
         working-directory: frame-studio-linux
         run: node scripts/verify-bundled-tools.cjs vendor/linux --platform linux
+      - name: Configure bundled media tools for tests and export
+        working-directory: frame-studio-linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor="$PWD/vendor/linux"
+          test -x "$vendor/ffmpeg" && test -x "$vendor/ffprobe"
+          echo "$vendor" >> "$GITHUB_PATH"
+          echo "FRAME_FFMPEG_PATH=$vendor/ffmpeg" >> "$GITHUB_ENV"
+          echo "FRAME_FFPROBE_PATH=$vendor/ffprobe" >> "$GITHUB_ENV"
       - name: Run media tool validation regression tests
         working-directory: frame-studio-linux
         run: node tests/2.4.23-media-tool-validation.test.js
