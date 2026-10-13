@@ -7,10 +7,13 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.25');
-for (const id of ['groupclips','groupmask','ungroupclips','selectgroup','entergroup','exitgroupview','togglegroup','grouptransform','groupmasktoggle']) {
+assert.equal(pkg.version, '2.4.27');
+for (const id of ['groupclips','groupmask','ungroupclips','selectgroup','togglegroup','grouptransform','groupmasktoggle']) {
   assert.doesNotMatch(html, new RegExp(`id=["']${id}["']`), `grouping UI control ${id} should be removed`);
 }
+assert.match(html, /id=\"groupselected\"/, 'new group action is exposed on the timeline');
+assert.match(html, /id=\"ungroupselected\"/, 'ungroup action is exposed on the timeline');
+assert.match(renderer, /function groupSelectedClips\(/, 'current layer grouping is available');
 assert.match(renderer, /function stripLegacyGroupMetadata\(/, 'legacy grouping migration exists');
 assert.match(renderer, /legacyGroupTransforms/, 'legacy group transforms can be retained on individual clips');
 function functionSource(name) {

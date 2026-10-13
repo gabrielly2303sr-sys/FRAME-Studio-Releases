@@ -1,31 +1,16 @@
-# FRAME Studio 2.4.27 — Release Verification
+# FRAME Studio 2.4.27 preview verification
 
-## Build and test
-Linux x64:
-```sh
-cd frame-studio-linux
-npm install --no-audit --no-fund
-npm test
-npm run build:linux
-```
+## Scope
+- Local-only preview build; not released or signed.
+- Version metadata changed to 2.4.27; update-provider and workflow configuration preserved.
+- Camera pivot is rendered as SVG editor overlay only, not painted onto the export canvas.
+- Video audio uses a dedicated audio element and is synchronized with sourceTimeAt / Time Remap in timeline playback.
+- Multi-selection and multi-resize codepaths include per-clip undo/keyframe handling.
+- Appearance gradient settings are stored in user preferences and are not inserted into project render properties.
 
-Windows x64 (PowerShell):
-```powershell
-cd frame-studio-linux
-npm install --no-audit --no-fund
-npm test
-npm run build:win:installer
-```
+## Validation to run locally
+`npm test`
 
-Publish the Release with tag `v2.4.27` and target `main` only if that tag does not already exist. The uploaded source ZIP does not contain repository Git metadata, so tag availability must be checked in the user's local clone.
+Then run `npm start` and manually verify: orbit around an object/target; Ctrl-click multiple clips; drag a resize handle on one selected clip and verify all selected clips change duration; switch accent modes and open the gradient picker; play a video with images/other videos layered on top and verify audio continues.
 
-## Validation checklist
-- [ ] All `npm test` checks pass in both Windows and Linux CI.
-- [ ] The visible application title, badge, home footer, and package version show 2.4.27.
-- [ ] Play a downloaded video, move the timeline playhead forward/backward repeatedly, then resume playback.
-- [ ] Extract audio, confirm preview and export contain the extracted audio once, and verify undo restores the original state.
-- [ ] In the Downloader, confirm bundled yt-dlp, FFmpeg and ffprobe pass their correct version commands.
-- [ ] Extract the final AppImage and verify the real bundled tools; test the Windows installer on a machine without system FFmpeg/yt-dlp.
-- [ ] Confirm the final assets are attached only after all build/verification jobs pass.
-
-The source/test changes do not prove the final GUI behaves correctly. Test the generated installer and AppImage before announcing the release.
+A GUI/Electron end-to-end run was not possible in the file-editing environment, so the visual playback test should be performed before the actual release.

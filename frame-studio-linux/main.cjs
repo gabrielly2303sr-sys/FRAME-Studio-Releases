@@ -1,15 +1,18 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, session } = require('electron');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const path = require('node:path');
+// Local preview can opt into an isolated profile so it never overwrites the
+// installed FRAME Studio settings, projects cache, or downloaded-media index.
+if (!app.isPackaged && process.env.FRAME_STUDIO_USER_DATA_DIR && !app.isReady()) {
+  app.setPath('userData', path.resolve(process.env.FRAME_STUDIO_USER_DATA_DIR));
+}
 const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
-const { serveMediaFile } = require('./media-protocol.cjs');
-const { createMediaServer } = require('./media-server.cjs');
-const mediaServer = createMediaServer();
+const { createMediaFileResponse } = require('./media-range.cjs');
 const { pathToFileURL } = require('node:url');
 const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
@@ -65,6 +68,18 @@ function setupAutomaticUpdates() {
 
   let promptOpen = false;
   let downloadRequested = false;
+  let checkInProgress = false;
+  let retryTimer = null;
+  let retryDelayMs = 45_000;
+  const clearRetry = () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; };
+  const scheduleRetry = () => {
+    if (downloadRequested) return;
+    clearRetry();
+    const delay = retryDelayMs;
+    retryDelayMs = Math.min(retryDelayMs * 2, 15 * 60 * 1000);
+    retryTimer = setTimeout(() => { retryTimer = null; check(); }, delay);
+    retryTimer.unref?.();
+  };
   const getWindow = () => BrowserWindow.getAllWindows().find(win => !win.isDestroyed()) || null;
   const showMessage = async options => {
     const win = getWindow();
@@ -76,9 +91,15 @@ function setupAutomaticUpdates() {
   };
 
   autoUpdater.on('checking-for-update', () => console.info('Checking for FRAME Studio updates…'));
-  autoUpdater.on('update-not-available', info => console.info(`FRAME Studio is up to date (${info?.version || app.getVersion()}).`));
+  autoUpdater.on('update-not-available', info => {
+    clearRetry();
+    retryDelayMs = 45_000;
+    console.info(`FRAME Studio is up to date (${info?.version || app.getVersion()}).`);
+  });
 
   autoUpdater.on('update-available', async info => {
+    clearRetry();
+    retryDelayMs = 45_000;
     if (promptOpen) return;
     promptOpen = true;
     try {
@@ -100,6 +121,7 @@ function setupAutomaticUpdates() {
           downloadRequested = false;
           notifyRenderer({ stage: 'error' });
           console.error('FRAME Studio update download failed:', error);
+          scheduleRetry();
           await showMessage({
             type: 'error',
             title: 'FRAME Studio — Update failed',
@@ -143,9 +165,16 @@ function setupAutomaticUpdates() {
 
   autoUpdater.on('error', error => {
     console.warn('FRAME Studio update check/update error:', error?.message || error);
-    if (!downloadRequested) return; // Keep offline startup quiet unless the user chose to update.
+    if (!downloadRequested) {
+      // New releases are published before CI attaches latest.yml and installers.
+      // Retry with backoff rather than making an app opened during that window
+      // wait six hours before it can discover the release.
+      scheduleRetry();
+      return;
+    }
     downloadRequested = false;
     notifyRenderer({ stage: 'error' });
+    scheduleRetry();
     showMessage({
       type: 'error',
       title: 'FRAME Studio — Update failed',
@@ -157,8 +186,14 @@ function setupAutomaticUpdates() {
   });
 
   const check = () => {
-    if (downloadRequested) return;
-    autoUpdater.checkForUpdates().catch(error => console.warn('FRAME Studio update check failed:', error?.message || error));
+    if (downloadRequested || checkInProgress) return;
+    checkInProgress = true;
+    Promise.resolve(autoUpdater.checkForUpdates())
+      .catch(error => {
+        console.warn('FRAME Studio update check failed:', error?.message || error);
+        scheduleRetry();
+      })
+      .finally(() => { checkInProgress = false; });
   };
   const startupCheck = setTimeout(check, 9000);
   startupCheck.unref?.();
@@ -565,7 +600,7 @@ function createWindow() {
   return win;
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   configureBundledMediaTools();
   // Ask for microphone access only after the user starts an explicit recording.
   // This is scoped to the trusted local renderer and grants audio capture only.
@@ -608,13 +643,15 @@ app.whenReady().then(async () => {
     try {
       const target = new URL(request.url).searchParams.get('path');
       if (!target || !path.isAbsolute(target)) return new Response('Invalid media path', { status: 400 });
-      return await serveMediaFile(target, request.headers.get('range'), request.method);
+      // Do not proxy file:// through net.fetch(): it may not honor Range requests
+      // as HTTP 206 responses. Video and audio decoders need byte ranges to seek.
+      return createMediaFileResponse(target, request);
     } catch (error) {
+      console.warn('FRAME media protocol request failed:', error?.message || error);
       return new Response(`Could not open media: ${error.message}`, { status: 404 });
     }
   });
 
-  await mediaServer.start();
   createWindow();
   setupAutomaticUpdates();
   app.on('activate', () => {
@@ -622,16 +659,8 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('will-quit', () => { mediaServer.stop().catch(() => {}); });
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
-});
-
-// Synchronous so preload can build seekable http://127.0.0.1 media URLs before the page runs.
-ipcMain.on('frame:media-server-info', event => {
-  try { assertTrustedSender(event); event.returnValue = { origin: mediaServer.origin, token: mediaServer.token }; }
-  catch { event.returnValue = null; }
 });
 
 ipcMain.handle('frame:check-export-tools', async event => {
@@ -1232,40 +1261,6 @@ ipcMain.handle('frame:downloaded-media-resolve', async (event, relativeFile) => 
   const resolved = await resolveDownloadedMedia(relativeFile);
   const { root, ...safe } = resolved;
   return safe;
-});
-ipcMain.handle('frame:downloaded-media-delete', async (event, relativeFile) => {
-  assertTrustedSender(event);
-  // The path is validated against the Downloaded Media root (no traversal, no symlinks, supported media only).
-  const resolved = await resolveDownloadedMedia(relativeFile);
-  const win = BrowserWindow.fromWebContents(event.sender);
-  const ask = (options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options));
-  const confirm = await ask({
-    type: 'warning',
-    buttons: ['Mover para a lixeira', 'Cancelar'],
-    defaultId: 1,
-    cancelId: 1,
-    title: 'Apagar mídia baixada',
-    message: `Apagar "${resolved.name}"?`,
-    detail: 'O arquivo será removido da biblioteca Saved. Projetos que usam este arquivo precisarão relinkar a mídia.'
-  });
-  if (confirm.response !== 0) return { deleted: false, canceled: true, relativePath: resolved.relativePath, path: resolved.path };
-  try {
-    await shell.trashItem(resolved.path);
-    return { deleted: true, trashed: true, relativePath: resolved.relativePath, path: resolved.path, name: resolved.name };
-  } catch (trashError) {
-    const permanent = await ask({
-      type: 'warning',
-      buttons: ['Apagar permanentemente', 'Cancelar'],
-      defaultId: 1,
-      cancelId: 1,
-      title: 'Lixeira indisponível',
-      message: 'Não foi possível mover o arquivo para a lixeira.',
-      detail: `${trashError?.message || trashError}\n\nDeseja apagá-lo permanentemente? Esta ação não pode ser desfeita.`
-    });
-    if (permanent.response !== 0) return { deleted: false, canceled: true, relativePath: resolved.relativePath, path: resolved.path };
-    await fs.unlink(resolved.path);
-    return { deleted: true, trashed: false, relativePath: resolved.relativePath, path: resolved.path, name: resolved.name };
-  }
 });
 ipcMain.handle('frame:downloaded-media-open-folder', async (event, relativeFolder) => {
   assertTrustedSender(event);

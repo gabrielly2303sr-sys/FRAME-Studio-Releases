@@ -1,8 +1,5 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-let mediaServerInfo = null;
-try { mediaServerInfo = ipcRenderer.sendSync('frame:media-server-info'); } catch { mediaServerInfo = null; }
-
 contextBridge.exposeInMainWorld('frameAPI', {
   checkExportTools: () => ipcRenderer.invoke('frame:check-export-tools'),
   saveVideo: (name, buffer, duration, crf, fps) => ipcRenderer.invoke('frame:save-video', { name, buffer, duration, crf, fps }),
@@ -35,7 +32,6 @@ contextBridge.exposeInMainWorld('frameAPI', {
   listDownloadedMedia: (folder) => ipcRenderer.invoke('frame:downloaded-media-list', folder),
   createDownloadedMediaFolder: (parentFolder, name) => ipcRenderer.invoke('frame:downloaded-media-create-folder', { parentFolder, name }),
   resolveDownloadedMedia: (relativePath) => ipcRenderer.invoke('frame:downloaded-media-resolve', relativePath),
-  deleteDownloadedMedia: (relativePath) => ipcRenderer.invoke('frame:downloaded-media-delete', relativePath),
   openDownloadedMediaFolder: (folder) => ipcRenderer.invoke('frame:downloaded-media-open-folder', folder),
   downloadYoutube: (payload) => ipcRenderer.invoke('frame:youtube-download', payload),
   cancelYoutubeDownload: () => ipcRenderer.send('frame:youtube-cancel'),
@@ -54,10 +50,7 @@ contextBridge.exposeInMainWorld('frameAPI', {
   getPathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch { return null; }
   },
-  // Seekable loopback HTTP URL; falls back to the legacy scheme only if the server is unavailable.
-  mediaURL: (target) => mediaServerInfo
-    ? `${mediaServerInfo.origin}/media?k=${mediaServerInfo.token}&p=${encodeURIComponent(target)}`
-    : `frame-media://asset/?path=${encodeURIComponent(target)}`,
+  mediaURL: (target) => `frame-media://asset/?path=${encodeURIComponent(target)}`,
   openPath: (target) => ipcRenderer.invoke('frame:open-path', target),
   isDesktop: true
 });

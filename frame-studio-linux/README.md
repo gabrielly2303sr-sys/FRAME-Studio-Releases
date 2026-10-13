@@ -1,11 +1,24 @@
-# FRAME Studio 2.4.25 — Seekable Downloaded Media & Detached Extracted Audio
+# FRAME Studio 2.4.27 — Appearance, Camera Pivot & Timeline Workflow
 
-- Fixes the frozen first frame when seeking downloaded videos/extracted audio (loopback HTTP media server) and detaches extracted audio from the source video clip. Tests: `tests/2.4.25-seek-http-and-detached-audio.test.js`. Automated tests pass; real Electron-window and final-installer testing still need to be done.
+This is an incremental update to the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. The source archive available for this update was based on the 2.4.25 source kit; changes that may exist only in remote releases 2.4.26–2.4.30 were not available in this workspace and should be merged from the actual 2.4.30 source before replacing the latest release.
 
-## Previous: 2.4.23 — Bundled Media Tools Verification Fix
+## Added
+- Appearance accent modes: solid color, animated RGB gradient, and background-adaptive RGB gradient, with saturation, lightness, and speed controls. Background palette sampling falls back safely when an image/video cannot be sampled by the browser.
+- Optional 3D camera look-at pivot, numeric XYZ controls, pivot-at-selected-layer, and orbit navigation around the pivot.
+- Group/ungroup and enter/exit group controls; effect-library selections apply to selected layers, and transform-handle resizing scales multiple selected layers together.
+- Time Remap Freeze Frame · Split: creates before, one-second frozen-frame, and after segments on the same track.
+- End + join: trims a clip at the playhead and closes the following gap on that track.
 
-This release fixes the repeat “missing bundled media tools” issue in Linux AppImages. The Linux package now bundles the standalone `yt-dlp_linux` ELF executable rather than the Python zipapp, and the runtime can repair missing executable permissions by copying the already bundled binary into FRAME's app-owned cache. No `pacman`, Python package, or system-level FFmpeg/yt-dlp install is intended for the official package.
+## Compatibility and tests
+Older project files remain readable. The added camera pivot fields default when absent. Background-adaptive accent color depends on whether the Electron/Chromium canvas can sample the selected background media.
 
-The release workflow validates both `linux-unpacked/resources/downloader` and the final extracted AppImage, then runs `--version` against yt-dlp, FFmpeg, and ffprobe before publishing. It also verifies that `latest-linux.yml` (and the Windows `latest.yml`) is generated with the installer assets.
+Run from this directory:
+```sh
+npm install --no-audit --no-fund
+npm test
+```
 
-Use the official installer/AppImage. Source development runs prepare tools under `vendor/<platform>`; those downloaded files are not committed to this source package.
+Automated regression tests pass in this source workspace. A packaged Electron GUI was not launched here, so verify the appearance controls, camera pivot/orbit, multi-layer effects/resizing, freeze split, and end-and-join operation in the actual app before treating the update as fully validated.
+
+## Release
+The package version is `2.4.27` and should be published with tag `v2.4.27`. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. The source archive available for this local preview was based on the 2.4.25 source kit; confirm/merge any additional changes from intermediate source versions before an official release.

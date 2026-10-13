@@ -1,12 +1,12 @@
 {
   "name": "frame-studio",
-  "version": "2.4.25",
+  "version": "2.4.27",
   "private": true,
-  "description": "Video editor with verified bundled media tools and tool-specific health checks",
+  "description": "Test preview: RGB accent gradients, 3D camera pivot, multi-clip editing and continuous video audio",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/smoke.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.16-animation-effects.test.js && node tests/2.4.16-advanced-effects.test.js && node tests/2.4.17-performance-export.test.js && node tests/2.4.18-live-preview-downloader.test.js && node tests/2.4.19-downloaded-media.test.js && node tests/2.4.20-bundled-tools-text-shortcuts.test.js && node tests/2.4.21-bundled-tools-autoprepare.test.js && node tests/2.4.23-media-tool-validation.test.js && node tests/2.4.23-seek-and-library-delete.test.js && node tests/2.4.25-seek-http-and-detached-audio.test.js",
+    "test": "node tests/smoke.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.16-animation-effects.test.js && node tests/2.4.16-advanced-effects.test.js && node tests/2.4.17-performance-export.test.js && node tests/2.4.18-live-preview-downloader.test.js && node tests/2.4.19-downloaded-media.test.js && node tests/2.4.20-bundled-tools-text-shortcuts.test.js && node tests/2.4.21-bundled-tools-autoprepare.test.js && node tests/2.4.23-media-tool-validation.test.js && node tests/2.4.24-playhead-video-scrub.test.js && node tests/media-range.test.js && node tests/2.4.27-preview-regression.test.js",
     "build:win": "electron-builder --win nsis portable --publish never",
     "build:linux": "electron-builder --linux AppImage deb rpm --publish never",
     "build": "electron-builder",
@@ -40,11 +40,12 @@
       "preload.cjs",
       "media-export.cjs",
       "media-tools.cjs",
-      "media-protocol.cjs",
+      "media-range.cjs",
       "index.html",
       "customization.js",
       "package.json",
-      "gif-decoder.js"
+      "gif-decoder.js",
+      "video-preview-seek.js"
     ],
     "artifactName": "FRAME-Studio-${version}-${platform}-${arch}.${ext}",
     "win": {
