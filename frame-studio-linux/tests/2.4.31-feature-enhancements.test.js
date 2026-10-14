@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const custom = fs.readFileSync(path.join(root, 'customization.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.35');
+assert.equal(pkg.version, '2.4.36');
 for (const item of [
   'id="customAccentMode"', 'value="rgb"', 'value="background-rgb"',
   'id="customAccentSaturation"', 'id="customAccentLightness"', 'id="customAccentSpeed"',

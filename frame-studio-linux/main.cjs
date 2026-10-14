@@ -65,6 +65,7 @@ function setupAutomaticUpdates() {
 
   let promptOpen = false;
   let downloadRequested = false;
+  let pendingUpdateVersion = '';
   let checkInProgress = false;
   let retryTimer = null;
   let retryDelayMs = 45_000;
@@ -98,6 +99,7 @@ function setupAutomaticUpdates() {
     clearRetry();
     retryDelayMs = 45_000;
     if (promptOpen) return;
+    pendingUpdateVersion = String(info?.version || '');
     promptOpen = true;
     try {
       const result = await showMessage({
@@ -112,11 +114,11 @@ function setupAutomaticUpdates() {
       });
       if (result.response === 0) {
         downloadRequested = true;
-        notifyRenderer({ stage: 'downloading', percent: 0 });
+        notifyRenderer({ stage: 'downloading', percent: 0, version: pendingUpdateVersion });
         autoUpdater.downloadUpdate().catch(async error => {
           if (!downloadRequested) return;
           downloadRequested = false;
-          notifyRenderer({ stage: 'error' });
+          notifyRenderer({ stage: 'error', version: pendingUpdateVersion });
           console.error('FRAME Studio update download failed:', error);
           scheduleRetry();
           await showMessage({
@@ -137,12 +139,13 @@ function setupAutomaticUpdates() {
   });
 
   autoUpdater.on('download-progress', progress => {
-    notifyRenderer({ stage: 'downloading', percent: Number(progress?.percent) || 0 });
+    notifyRenderer({ stage: 'downloading', percent: Number(progress?.percent) || 0, version: pendingUpdateVersion });
   });
 
   autoUpdater.on('update-downloaded', async info => {
     downloadRequested = false;
-    notifyRenderer({ stage: 'downloaded', percent: 100 });
+    pendingUpdateVersion = String(info?.version || pendingUpdateVersion || '');
+    notifyRenderer({ stage: 'downloaded', percent: 100, version: pendingUpdateVersion });
     try {
       const result = await showMessage({
         type: 'info',
@@ -170,7 +173,7 @@ function setupAutomaticUpdates() {
       return;
     }
     downloadRequested = false;
-    notifyRenderer({ stage: 'error' });
+    notifyRenderer({ stage: 'error', version: pendingUpdateVersion });
     scheduleRetry();
     showMessage({
       type: 'error',

@@ -1,8 +1,8 @@
 {
   "name": "frame-studio",
-  "version": "2.4.35",
+  "version": "2.4.36",
   "private": true,
-  "description": "FRAME Studio test package: local speech-to-text subtitles and basic OBJ/R6 workshop",
+  "description": "FRAME Studio video editor with visible update download progress",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
