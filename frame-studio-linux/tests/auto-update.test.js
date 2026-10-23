@@ -8,7 +8,7 @@ const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const installer = fs.readFileSync(path.join(root, 'install-linux.sh'), 'utf8');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-assert.equal(pkg.version, '2.4.37');
+assert.equal(pkg.version, '2.4.39');
 assert.equal(pkg.build.publish[0].provider, 'github');
 assert.equal(pkg.build.publish[0].owner, 'gabrielly2303sr-sys');
 assert.equal(pkg.build.publish[0].repo, 'FRAME-Studio-Releases');

@@ -305,8 +305,19 @@
   function validHex(value, fallback) {
     return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;
   }
+  const VIDEO_BACKGROUND_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi', '.mpeg', '.mpg', '.wmv', '.ogv', '.3gp', '.m2ts', '.mts']);
+  const IMAGE_BACKGROUND_EXTENSIONS = new Set(['.gif', '.apng', '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.avif', '.tif', '.tiff']);
+  function inferBackgroundKind(filePath, requestedKind) {
+    const cleanPath = String(filePath || '').split(/[?#]/, 1)[0];
+    const match = /(?:^|[\\/])[^\\/]*?(\.[^.\\/]+)$/.exec(cleanPath);
+    const extension = match ? match[1].toLowerCase() : '';
+    if (IMAGE_BACKGROUND_EXTENSIONS.has(extension)) return 'image';
+    if (VIDEO_BACKGROUND_EXTENSIONS.has(extension)) return 'video';
+    return requestedKind === 'video' ? 'video' : 'image';
+  }
   function normalizeSettings(value) {
     const input = value && typeof value === 'object' ? value : {};
+    const backgroundPath = typeof input.backgroundPath === 'string' ? input.backgroundPath.slice(0, 4096) : '';
     return {
       language: input.language === 'pt-BR' ? 'pt-BR' : 'en-US',
       accent: validHex(input.accent, DEFAULTS.accent),
@@ -314,9 +325,9 @@
       accentSaturation: clamp(input.accentSaturation ?? DEFAULTS.accentSaturation, 15, 100),
       accentLightness: clamp(input.accentLightness ?? DEFAULTS.accentLightness, 25, 82),
       accentSpeed: clamp(input.accentSpeed ?? DEFAULTS.accentSpeed, 1, 20),
-      backgroundPath: typeof input.backgroundPath === 'string' ? input.backgroundPath.slice(0, 4096) : '',
+      backgroundPath,
       backgroundName: typeof input.backgroundName === 'string' ? input.backgroundName.slice(0, 300) : '',
-      backgroundKind: input.backgroundKind === 'video' ? 'video' : 'image',
+      backgroundKind: inferBackgroundKind(backgroundPath, input.backgroundKind),
       bgFit: input.bgFit === 'contain' ? 'contain' : 'cover',
       tint: validHex(input.tint, DEFAULTS.tint),
       blur: clamp(input.blur ?? DEFAULTS.blur, 0, 32), overlay: clamp(input.overlay ?? DEFAULTS.overlay, 0, 90),
@@ -503,7 +514,7 @@
     'Ferramentas do viewport 3D': '3D viewport tools', 'Ir ao fim': 'Go to End', 'Velocidade personalizada': 'Custom Speed'
   });
 
-  const core = { DEFAULTS, TRANSLATIONS, clamp, validHex, normalizeSettings, hexLuminance, accentTextColor };
+  const core = { DEFAULTS, TRANSLATIONS, clamp, validHex, inferBackgroundKind, normalizeSettings, hexLuminance, accentTextColor };
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
   if (typeof document === 'undefined' || !root) return;
 
@@ -740,18 +751,32 @@
         const exists = await root.frameAPI.mediaExists(targetPath);
         if (loadEpoch !== backgroundLoadEpoch) return;
         if (!exists) {
-          settings.backgroundPath = '';
-          settings.backgroundName = '';
-          safePersist();
-          updateControlValues();
-          return;
+          // Keep the remembered path intact. A transient access check or moved file
+          // must not silently erase the user's background preference. Still attempt
+          // the media URL below; the protocol's load/error event is authoritative.
+          const status = $('#customSavedStatus');
+          if (status) status.textContent = settings.language === 'en-US'
+            ? 'Checking background file access…'
+            : 'Verificando acesso ao arquivo de fundo…';
         }
       } catch { /* The custom protocol remains the final availability check. */ }
     }
     if (loadEpoch !== backgroundLoadEpoch) return;
-    const url = root.frameAPI?.mediaURL ? root.frameAPI.mediaURL(targetPath) : '';
-    if (!url) return;
-    if (targetKind === 'video') {
+    let url = '';
+    try { url = root.frameAPI?.mediaURL ? root.frameAPI.mediaURL(targetPath) : ''; } catch { url = ''; }
+    if (!url) {
+      const status = $('#customSavedStatus');
+      if (status) status.textContent = settings.language === 'en-US'
+        ? 'This app build cannot open local background media. Reinstall/update the desktop package.'
+        : 'Esta versão do app não consegue abrir mídias de fundo locais. Reinstale/atualize o pacote desktop.';
+      return;
+    }
+    const kind = inferBackgroundKind(targetPath, targetKind);
+    settings.backgroundKind = kind;
+    if (kind === 'video') {
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
       video.src = url;
       video.hidden = false;
       video.load();
@@ -785,7 +810,7 @@
       if (root.frameAPI?.selectCustomizationBackground) {
         const result = await root.frameAPI.selectCustomizationBackground();
         if (result?.canceled || !result?.filePath) return;
-        settings = normalizeSettings({ ...settings, backgroundPath: result.filePath, backgroundName: result.name || result.filePath.split(/[\\/]/).pop(), backgroundKind: result.kind === 'video' ? 'video' : 'image' });
+        settings = normalizeSettings({ ...settings, backgroundPath: result.filePath, backgroundName: result.name || result.filePath.split(/[\\/]/).pop(), backgroundKind: inferBackgroundKind(result.filePath, result.kind) });
         applyAppearance(); applyBackground(); safePersist();
         const filename = $('#customBackgroundFilename');
         if (filename) filename.textContent = settings.backgroundName;
@@ -797,7 +822,7 @@
         const file = input.files?.[0];
         const path = root.frameAPI?.getPathForFile?.(file);
         if (!file || !path || !root.frameAPI?.mediaURL) return;
-        const isVideo = file.type.startsWith('video/');
+        const isVideo = inferBackgroundKind(path, file.type.startsWith('video/') ? 'video' : 'image') === 'video';
         settings = normalizeSettings({ ...settings, backgroundPath: path, backgroundName: file.name, backgroundKind: isVideo ? 'video' : 'image' });
         applyAppearance(); applyBackground(); safePersist();
       }, { once: true });
@@ -839,7 +864,15 @@
     $('#customCompact')?.addEventListener('change', event => setValue('compact', event.target.checked));
     $('#chooseBackgroundBtn')?.addEventListener('click', chooseBackground);
     $('#customBackgroundImage')?.addEventListener('load', () => sampleBackgroundPalette(true));
-    $('#customBackgroundVideo')?.addEventListener('loadeddata', () => sampleBackgroundPalette(true));
+    $('#customBackgroundVideo')?.addEventListener('loadeddata', () => {
+      sampleBackgroundPalette(true);
+      const video = $('#customBackgroundVideo');
+      if (video && !video.hidden && !settings.reduceMotion && video.paused) video.play().catch(() => { });
+    });
+    $('#customBackgroundVideo')?.addEventListener('canplay', () => {
+      const video = $('#customBackgroundVideo');
+      if (video && !video.hidden && !settings.reduceMotion && video.paused) video.play().catch(() => { });
+    });
     $('#customBackgroundVideo')?.addEventListener('timeupdate', () => sampleBackgroundPalette(false));
     $('#customBackgroundImage')?.addEventListener('error', () => {
       if ($('#customBackgroundImage').hidden || !settings.backgroundPath) return;
