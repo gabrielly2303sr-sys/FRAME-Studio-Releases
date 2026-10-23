@@ -64,7 +64,7 @@ function fakeVideo({ currentTime = 0, seeking = false, readyState = 2 } = {}) {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /<script src="\.\/video-preview-seek\.js"><\/script>/);
   assert.match(html, /helper\.requestSeek\(el,wanted/);
-  const begin = html.match(/function beginPlayheadDrag\(ev\)\{([^\n]+)/)?.[1] || '';
+  const begin = html.match(/function beginPlayheadDrag\(ev\)\{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(begin, /playing=false;playStarting=false;playbackEpoch\+\+;lastFrame=0/);
   assert.match(begin, /settleTimelineVideoSeeksAtPlayhead\(\)/);
   const attach = html.match(/function attachTimelineVideoPreviewEvents\(asset,el\)\{([^\n]+)/)?.[1] || '';

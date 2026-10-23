@@ -462,7 +462,7 @@ async function renderFrameSequenceToMp4(options = {}) {
   let audioIndex = 0;
   const sourceClips = Array.isArray(audioClips) ? audioClips.slice(0, 500) : [];
   for (const clip of sourceClips) {
-    if (!clip || !['video', 'audio'].includes(clip.kind)) continue;
+    if (!clip || !['video', 'audio'].includes(clip.kind) || (clip.kind === 'video' && clip.muteSourceAudio)) continue;
     const sourcePath = clip.path;
     if (typeof sourcePath !== 'string' || !path.isAbsolute(sourcePath)) {
       throw new Error(`Clip "${clip.name || 'unnamed'}" does not have a valid file path. Relink or reimport the media.`);

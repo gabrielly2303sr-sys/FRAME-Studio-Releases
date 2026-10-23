@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.36', 'package version');
+assert.equal(pkg.version, '2.4.37', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -26,7 +26,7 @@ for (const required of [
   'data-handle=\"rotateX3d\"', 'data-handle=\"rotateY3d\"', 'data-handle=\"rotateZ3d\"', 'timeline-snap-indicator', 'frame-recent-projects',
   'data-prop="rgbSplit"', 'data-prop="waveAmp"', 'data-prop="oscX"',
   'data-prop="exposure"', 'data-prop="gamma"', 'data-prop="chromaKey"',
-  'id="cameaseprop"', 'data-camera-ease="smooth"', 'camera-tween-segment', 'getTweenSegments', 'migrateLegacyLayerTracks', 'findEmptyVideoTrack', 'timelineTargetTrack', 'camera-keylane-empty', 'target-track', 'version:9', 'migrateLegacyLayerTracks', 'id="camedetailcurve"', 'function updateCameraEaseUI()', 'function applyCameraEase(name)', 'function writeCameraPoseAtPlayhead(pose)', 'visible.left+1,visible.right-1', 'lockedScrollLeft', 'blankClickSelection', 'Seleção limpa', 'trackrow-video-even', 'TRACK_ROW_HEIGHT=36', 'videoTrackCount=6', "target.closest('#app')", 'Crie um keyframe para esta propriedade da câmera',
+  'id="cameaseprop"', 'data-camera-ease="smooth"', 'camera-tween-segment', 'getTweenSegments', 'migrateLegacyLayerTracks', 'findEmptyVideoTrack', 'timelineTargetTrack', 'camera-keylane-empty', 'target-track', 'version:9', 'migrateLegacyLayerTracks', 'id="camedetailcurve"', 'function updateCameraEaseUI()', 'function applyCameraEase(name)', 'function writeCameraPoseAtPlayhead(pose)', 'visible.left+1,visible.right-1', 'playheadDrag.pointerX', 'requestAnimationFrame(updateAtPointer)', 'blankClickSelection', 'Seleção limpa', 'trackrow-video-even', 'TRACK_ROW_HEIGHT=36', 'videoTrackCount=6', "target.closest('#app')", 'Crie um keyframe para esta propriedade da câmera',
   'data-camera-action="orbit-left"', 'function drawLayer3D', 'function drawTexturedTriangle',
   'id="importfonts"', 'data-panel="shadow"', 'function drawWaveformCanvas', 'function requestWaveform', 'function withDropShadow', 'function initWorkspaceResizers', 'function resetWorkspaceLayout', 'function groupSelectedClips', 'function toggleGroupCollapse', 'group-collapse-toggle', 'function importCustomFonts', 'fadeIn:clip.fadeIn||0',
   'application/x-frame-asset', 'frameAPI.checkExportTools', 'frameAPI.beginFrameExport', 'frameAPI.writeExportFrame', 'frameAPI.finishFrameExport', 'onExportProgress'

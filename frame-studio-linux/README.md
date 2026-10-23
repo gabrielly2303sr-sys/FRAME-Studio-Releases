@@ -1,23 +1,29 @@
-# FRAME Studio 2.4.36
+# FRAME Studio 2.4.37
 
-FRAME Studio is a Linux-first video editor with a dark, compact interface, multi-track timeline, keyframes, camera tools, media import, local project files and MP4 export.
+Compact video editor with a multi-track timeline, keyframes, visual effects, advanced 3D layer transforms, audio tools, and MP4 export.
 
-## 2.4.36 update behavior
-- The app identifies itself as version 2.4.36 throughout the window and in-app release notes.
-- Accepting an automatic update displays a visible progress panel connected to the real `electron-updater` download events.
-- The panel shows percentage, initial preparation, completion, and download failure states.
-- Automatic replacement supports packaged Windows NSIS builds and Linux AppImage builds. Portable Windows, DEB/RPM, and source/development installs use separate update paths.
+## Run and test
 
-## Experimental 2.4.35 features retained
-- Hardware H.264 encoding is attempted when the bundled FFmpeg supports it; CPU `libx264` remains the fallback.
-- Voice modifications are applied during export; preview playback may remain unprocessed.
-- OBJ textured model and R6 posing tools are prototypes rather than a full 3D engine.
-- Speech-to-text requires a locally selected `whisper-cli`, model and FFmpeg. These dependencies are not bundled with source packages.
+Requires Node.js 22+.
 
-## Development
-- Node.js 22 is used by the GitHub release workflow.
-- `npm install --no-audit --no-fund`
-- `npm test`
-- `npm start`
+```bash
+npm install --no-audit --no-fund
+npm test
+npm start
+```
 
-Release artifacts are built by `.github/workflows/release.yml` after publishing the matching GitHub Release tag. The release tag must match `frame-studio-linux/package.json` exactly. The updater relies on `latest.yml` for Windows and `latest-linux.yml` for Linux AppImage builds.
+The full suite includes renderer syntax/regression checks, timeline and audio tests, project/update configuration checks, and FFmpeg/ffprobe export integration tests. A passing test suite does not replace visual QA inside a packaged Electron build.
+
+## Release builds
+
+- Windows installer with automatic in-place updates: `npm run build:win:installer`
+- Windows portable: `npm run build:win:portable`
+- Linux packages: `npm run build:linux` (AppImage, DEB, RPM)
+
+The GitHub release workflow downloads platform-specific FFmpeg/ffprobe and yt-dlp into `vendor/` before building, so those large generated binaries do not need to be committed. Release metadata includes `latest.yml` for Windows and `latest-linux.yml` for Linux AppImage updates. Publish a GitHub Release tagged `v2.4.37` only after the package version and tag match. Linux AppImage and installed Windows NSIS are the supported automatic in-place update formats; DEB/RPM and portable builds keep their existing distribution update paths.
+
+## Export performance notes
+
+The exporter tries compatible hardware H.264 encoders exposed by the bundled FFmpeg, validates the output, then falls back to CPU `libx264`. Encoder availability and speed vary by OS, GPU, driver, codec settings, and source media. The preview also uses the existing fast-seek/cached-frame paths; timeline auto-scroll avoids re-seeking when the playhead time has not changed. No hardware throughput benchmark or packaged installer build is claimed from this source-only update.
+
+See [RELEASE-NOTES-2.4.37.md](RELEASE-NOTES-2.4.37.md) and the repository's [publish command](../PUBLISH-2.4.37.md).
