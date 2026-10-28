@@ -1,11 +1,17 @@
-# FRAME Studio 2.4.36 — Source kit
+# FRAME Studio 2.4.39 — Source kit
 
-This is the source package for FRAME Studio 2.4.36 with improved in-app update download progress feedback and consistent version labeling. It keeps the 2.4.35 experimental features in place.
+This archive contains the active Electron application in `frame-studio-linux/`. The top-level files are a historical source snapshot; make release changes and run tests from the nested active application.
 
-## Test
-1. Open `frame-studio-linux/`.
-2. Run `npm install --no-audit --no-fund`.
-3. Run `npm test`.
-4. Run `npm start` to inspect the editor.
+## Test / run
+1. `cd frame-studio-linux`
+2. `npm install --no-audit --no-fund`
+3. `npm test`
+4. `npm start`
 
-A source run does not perform automatic in-place self-updates. The updater progress panel can only be tested end-to-end in a packaged supported build (Windows NSIS or Linux AppImage) when a newer release is available.
+## Version 2.4.39 focus
+- Fixes deterministic MP4 export when the same source file is used by multiple overlapping timeline clips.
+- Ensures an exact cut activates only the intended clip during export and records decoded frames independently per clip.
+- Adds frame/time context to rendering and PNG-transfer errors, and reuses per-clip snapshot canvases to reduce allocation pressure.
+- Retains the previous 2.4.38 fixes for MP4/GIF backgrounds, groups, and multi-clip duration resizing.
+
+The updater implementation/configuration and project format remain compatible. Source/development runs do not perform automatic in-place self-updates; end-to-end updater testing requires a packaged supported build (Windows NSIS or Linux AppImage). See `frame-studio-linux/RELEASE-NOTES-2.4.39.md`.

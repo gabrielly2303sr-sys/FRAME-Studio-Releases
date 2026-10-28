@@ -1,3 +1,18 @@
+# 2.4.40
+
+- Focused MP4 export stability and backwards-compatibility fixes.
+- Adaptive temporary frame staging, preflight/ongoing disk-space checks, and conservative migration of malformed legacy clip timing.
+- Automated FFmpeg/ffprobe export tests pass in the source environment; packaged hardware validation is still required.
+
+---
+
+# 2.4.39
+
+- Fixed export aborts for overlapping clips that reuse the same source media by snapshotting each timeline instance separately.
+- Removed the interactive playhead epsilon at deterministic export frame boundaries to avoid false overlaps at edit cuts.
+- Export failures now report the specific frame and timestamp when video preparation, canvas encoding, or frame transfer fails.
+- Added regression coverage for same-source overlaps and exact cut boundaries; reused frame canvases to reduce per-frame allocations.
+
 # FRAME Studio 2.4.18 — Live Preview & Downloader
 
 ## [FIXED]

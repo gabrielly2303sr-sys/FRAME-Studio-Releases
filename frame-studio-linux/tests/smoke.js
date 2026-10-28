@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.39', 'package version');
+assert.equal(pkg.version, '2.4.40', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -509,6 +509,7 @@ migrationContext.data = sequentialV6;
 assert.equal(vm.runInContext('migrateLegacyLayerTracks(data)', migrationContext), false, 'clipes sequenciais na mesma faixa de um projeto atual devem ser preservados');
 assert.deepEqual(sequentialV6.clips.map(clip=>clip.track), [2,2], 'a migração não deve redistribuir cortes sequenciais válidos');
 const easingMigrationContext = vm.createContext({ MAX_VIDEO_TRACKS: 32, Number, Object, Math, clamp: (n,a,b)=>Math.max(a,Math.min(b,n)), defaultCamera3d:()=>({}) });
+vm.runInContext(helperLine('migrateLegacyClipRanges'), easingMigrationContext);
 vm.runInContext(helperLine('migrateLegacyEasing'), easingMigrationContext);
 easingMigrationContext.data = {version:6,videoTrackCount:6,clips:[]};
 vm.runInContext('migrateLegacyEasing(data)', easingMigrationContext);

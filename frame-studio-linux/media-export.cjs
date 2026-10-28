@@ -13,6 +13,38 @@ class ExportCanceledError extends Error {
   }
 }
 
+// PNG keeps export frames lossless, but long projects can fill the output drive
+// before FFmpeg starts. Select a high-quality JPEG spool only when a conservative
+// estimate says the PNG sequence would be risky. The final MP4 still uses the
+// user's H.264 quality/bitrate settings.
+const EXPORT_SPACE_RESERVE_BYTES = 64 * 1024 * 1024;
+const MIN_EXPORT_FREE_SPACE_BYTES = 64 * 1024 * 1024;
+
+function chooseFrameIntermediateFormat({ frameCount, width, height, availableBytes, reserveBytes = EXPORT_SPACE_RESERVE_BYTES } = {}) {
+  const frames = Math.floor(Number(frameCount));
+  const w = Math.floor(Number(width));
+  const h = Math.floor(Number(height));
+  if (!Number.isSafeInteger(frames) || frames < 1 || !Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 2 || h < 2 || w > 16384 || h > 16384) {
+    throw new Error('Invalid frame storage estimate. Check the project duration and export resolution.');
+  }
+  const px = w * h;
+  // Conservative spool estimates, not a prediction of the final MP4 size.
+  const pngEstimate = Math.ceil(frames * (px * 1.2 + 64 * 1024));
+  const jpegEstimate = Math.ceil(frames * (px * 0.25 + 64 * 1024));
+  const free = availableBytes == null ? NaN : Number(availableBytes);
+  if (!Number.isFinite(free) || free < 0) {
+    return { format: 'png', estimatedBytes: pngEstimate, availableBytes: null, safetyReserveBytes: reserveBytes };
+  }
+  if (free >= pngEstimate + reserveBytes) {
+    return { format: 'png', estimatedBytes: pngEstimate, availableBytes: free, safetyReserveBytes: reserveBytes };
+  }
+  if (free >= jpegEstimate + reserveBytes) {
+    return { format: 'jpeg', estimatedBytes: jpegEstimate, availableBytes: free, safetyReserveBytes: reserveBytes };
+  }
+  const gib = bytes => `${(bytes / (1024 ** 3)).toFixed(1)} GiB`;
+  throw new Error(`Not enough free disk space to safely export this project. Estimated temporary frame storage is approximately ${gib(jpegEstimate)} in high-quality JPEG mode plus a ${gib(reserveBytes)} safety reserve; ${gib(free)} is available. Free disk space or reduce the project duration/resolution, then export again.`);
+}
+
 function resolveToolPath(kind, override) {
   if (override) return override;
   const envName = kind === 'ffprobe' ? 'FRAME_FFPROBE_PATH' : 'FRAME_FFMPEG_PATH';
@@ -676,5 +708,5 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
 }
 
-module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments, voiceEffectFilters };
+module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments, voiceEffectFilters, chooseFrameIntermediateFormat, EXPORT_SPACE_RESERVE_BYTES, MIN_EXPORT_FREE_SPACE_BYTES };
 

@@ -6,7 +6,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const exporter = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.39');
+assert.equal(pkg.version, '2.4.40');
 assert.match(html, /function beginPlayheadDrag\(ev\)\{[\s\S]*?playheadDrag\.pointerX=e\.clientX[\s\S]*?requestAnimationFrame\(updateAtPointer\)/);
 assert.match(html, /if\(Math\.abs\(t-playhead\)>\.0001\)\{setPlayhead\(t\);schedulePreviewRefinement\(300\)\}/);
 assert.match(html, /function attachPreviewLayerSelection\(/);

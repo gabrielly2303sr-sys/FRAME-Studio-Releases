@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const exporter = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.39');
+assert.equal(pkg.version, '2.4.40');
 assert.doesNotMatch(html, /community\.js|community-config\.js|supabase\.co|data-community-tab/i, 'Community and Supabase runtime are completely removed');
 assert.ok(!pkg.build.files.some(file => /community/i.test(file)), 'Community is excluded from packaged runtime');
 assert.match(html, /@keyframes frameAccentShift/);

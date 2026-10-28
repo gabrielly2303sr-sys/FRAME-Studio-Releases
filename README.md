@@ -1,38 +1,27 @@
-# FRAME Studio 2.4.18 — Live Preview & Downloader
+# FRAME Studio 2.4.40
 
-This folder contains the Electron source code. It is not a prebuilt installer.
+FRAME Studio is a compact, Linux-first video editor built with Electron. **The active application source and release build are in `frame-studio-linux/`**. The other top-level application files are a historical source snapshot and are not used by the current GitHub release workflow.
 
-## 2.4.18
+## This update
 
-- Live timeline scrubbing: retains the last decoded video frame while a seek is pending, coalesces redraws to animation frames, uses `fastSeek` during drag when available, and requests a final accurate seek on release.
-- Fixes preview rendering paths that otherwise returned before composing the current timeline frame while a video was seeking.
-- Double-click text editing remains wired to selection and the text content field.
-- Easing controls support bounded draggable handles for Bounce, Elastic, and Steps.
-- Adds a YouTube downloader pane for authorized public content, with MP4/MP3 output and resolution/FPS options.
+- Timeline edge auto-scroll while dragging the playhead, preview-to-timeline clip selection, improved multi-selection resizing, and a unified End-at-Playhead trim mode.
+- Audio controls visible for video clips, audio extraction without duplicated source sound, and an advanced 3D Y-rotation correction.
+- Optional lightweight UI feedback effects and reduced-motion setting; removed new OBJ/R6 creation/import controls while retaining legacy project-reading paths.
+- Preview scheduling/canvas hints optimized conservatively. MP4 export tries supported hardware H.264 encoders and falls back to CPU encoding.
 
-## Downloader requirements
+See [`RELEASE-NOTES-2.4.40.md`](RELEASE-NOTES-2.4.40.md), [`TEST-REPORT-2.4.40.md`](TEST-REPORT-2.4.40.md), and [`PUBLISH-2.4.40.md`](PUBLISH-2.4.40.md).
 
-The downloader requires system-installed `yt-dlp` and `ffmpeg`. On CachyOS/Arch: `sudo pacman -S yt-dlp ffmpeg`. The app requires a rights/permission confirmation and does not provide DRM or access-restriction bypass functionality. Only save content you own or have explicit permission/a license to download. Availability and format selection depend on the source video and the installed yt-dlp version.
-
-## Build and test
-
-Requires Node.js 22+ and npm. MP4 export integration tests require FFmpeg and ffprobe.
+## Test and run
 
 ```bash
+cd frame-studio-linux
 npm install --no-audit --no-fund
 npm test
-npm run build:linux
+npm start
 ```
 
-On Windows, run `BUILD-WINDOWS.bat`. Electron Builder is pinned to version 25.1.8.
+Requires Node.js 22+ for the release workflow. MP4 integration tests require FFmpeg and ffprobe; the GitHub release workflow prepares platform tools and packages the Windows NSIS installer plus Linux AppImage/DEB/RPM.
 
-## Notes and limitations
+## Publishing
 
-- This remains an Electron/Chromium/V8 application; JavaScript is interpreted/JIT-compiled by V8. The update improves scheduling and decoded-frame reuse rather than changing the runtime architecture.
-- The timeline preview may show the last decoded frame briefly while seeking. Intermediate frames can still be skipped by long-GOP or slow-to-seek codecs.
-- The downloader UI and IPC require a real GUI test on Linux/Windows.
-- AppImage is the recommended standalone Linux package; some distributions need FUSE 2 compatibility. `.deb` and `.rpm` packages should be updated through their package manager.
-
-## GitHub Release and auto-update metadata
-
-The `.github/workflows/release.yml` workflow builds when a Release is published. Verify `latest.yml`, `.blockmap`, `latest-linux.yml`, and both platform jobs before announcing automatic updates.
+The existing `.github/workflows/release.yml` workflow builds release artifacts when a matching GitHub Release is published. Its tag version must match `frame-studio-linux/package.json` (`2.4.40`). Update-in-place automatic updates remain supported for installed Windows NSIS and Linux AppImage builds; development/source runs and DEB/RPM packages keep their existing update path.

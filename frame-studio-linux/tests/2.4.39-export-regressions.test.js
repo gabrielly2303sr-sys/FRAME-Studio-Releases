@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
-assert.equal(pkg.version, '2.4.39');
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'release package version must stay valid semver');
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 assert.match(renderer, /offlineVideoFrameSnapshots\.get\(c\.id\)/, 'each timeline clip must use its own decoded video snapshot');
 assert.match(renderer, /offlineVideoFrameCanvases\.get\(clip\.id\)/, 'frame canvases are reused per clip to avoid per-frame allocations');

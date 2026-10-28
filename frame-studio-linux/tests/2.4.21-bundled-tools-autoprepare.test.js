@@ -12,7 +12,7 @@ const mediaToolsSrc = fs.readFileSync(path.join(root, 'media-tools.cjs'), 'utf8'
 const bootstrap = fs.readFileSync(path.join(root, 'scripts', 'prepare-bundled-tools.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'release.yml'), 'utf8');
 
-assert.equal(pkg.version, '2.4.39');
+assert.equal(pkg.version, '2.4.40');
 assert.equal(pkg.scripts['prestart'], 'node scripts/prepare-bundled-tools.cjs --quiet --allow-missing');
 for (const lifecycle of ['prebuild', 'prebuild:win', 'prebuild:win:installer', 'prebuild:win:portable', 'prebuild:linux', 'prebuild:linux:appimage']) {
   assert.match(pkg.scripts[lifecycle] || '', /prepare-bundled-tools\.cjs/, `${lifecycle} should provision the native tools`);

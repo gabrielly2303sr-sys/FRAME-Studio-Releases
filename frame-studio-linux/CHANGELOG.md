@@ -1,3 +1,14 @@
+# 2.4.40
+
+- Focused bug-fix release for MP4 export stability and backwards compatibility.
+- Added adaptive temporary-frame storage: lossless PNG is retained when disk headroom is sufficient; high-quality JPEG intermediates are used only when the PNG estimate would threaten the safety reserve and JPEG staging is estimated to fit.
+- Added preflight and ongoing temporary-storage checks with explicit low-disk-space errors.
+- Added conservative migration for missing/invalid legacy clip timing fields without changing the project file format.
+- Retained the 2.4.39 fixes for same-source overlapping timeline clips and exact edit boundaries.
+- Automated tests, including FFmpeg/ffprobe MP4 integration tests, pass in the source environment; packaged hardware/media validation remains outstanding.
+
+---
+
 # 2.4.39
 
 - Fixed deterministic MP4 export with overlapping instances of the same video source by capturing per-clip decoded frames.

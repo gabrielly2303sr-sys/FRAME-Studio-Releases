@@ -8,7 +8,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const renderer=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1]||'';
 const custom=require('../customization.js');
-assert.equal(pkg.version,'2.4.39');
+assert.equal(pkg.version,'2.4.40');
 assert.equal(custom.inferBackgroundKind('/home/test/wallpaper.mp4','image'),'video','MP4 extension overrides stale saved image kind');
 assert.equal(custom.inferBackgroundKind('C:\\Media\\loop.GIF','video'),'image','GIF remains an image/animated image element');
 assert.equal(custom.inferBackgroundKind('/tmp/clip.webm','image'),'video');

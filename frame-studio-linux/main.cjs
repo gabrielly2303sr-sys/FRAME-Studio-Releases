@@ -11,7 +11,7 @@ const mediaTools = require('./media-tools.cjs');
 const { createMediaFileResponse } = require('./media-range.cjs');
 const { parseWhisperTranscript } = require('./subtitle-transcript.cjs');
 const { pathToFileURL } = require('node:url');
-const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
+const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError, chooseFrameIntermediateFormat, EXPORT_SPACE_RESERVE_BYTES, MIN_EXPORT_FREE_SPACE_BYTES } = require('./media-export.cjs');
 const activeExports = new Map();
 const activeYoutubeDownloads = new Map();
 const trustedRendererURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
@@ -703,6 +703,22 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     : extension
       ? path.join(path.dirname(result.filePath), `${path.basename(result.filePath, extension)}.mp4`)
       : `${result.filePath}.mp4`;
+  const width = Math.max(2, Math.min(16384, Math.floor(Number(payload.width) || 1920)));
+  const height = Math.max(2, Math.min(16384, Math.floor(Number(payload.height) || 1080)));
+  let availableBytes = null;
+  try {
+    const stats = await fs.statfs(path.dirname(outputPath));
+    const free = Number(stats.bavail) * Number(stats.bsize);
+    if (Number.isFinite(free) && free >= 0) availableBytes = free;
+  } catch {
+    // Some filesystems/platforms do not report statfs; retain the lossless path.
+  }
+  const pixelStorageEstimate = frameCount * width * height * 0.025;
+  const bitrateOutputEstimate = payload.rateMode === 'bitrate'
+    ? duration * ((Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)) * 1_000_000 + Math.max(96, Math.min(320, Number(payload.audioBitrate) || 192) * 1000)) / 8) * 1.2
+    : 0;
+  const safetyReserveBytes = Math.max(EXPORT_SPACE_RESERVE_BYTES, Math.ceil(pixelStorageEstimate), Math.ceil(bitrateOutputEstimate));
+  const frameStorage = chooseFrameIntermediateFormat({ frameCount, width, height, availableBytes, reserveBytes: safetyReserveBytes });
   const controller = new AbortController();
   let tempDir;
   try {
@@ -726,7 +742,9 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     const session = {
       id: randomUUID(), controller, tempDir, outputPath,
       temporaryOutputPath: path.join(tempDir, 'rendered.mp4'),
-      framePattern: path.join(tempDir, 'frame-%08d.png'),
+      framePattern: path.join(tempDir, `frame-%08d.${frameStorage.format === 'jpeg' ? 'jpg' : 'png'}`),
+      frameFormat: frameStorage.format,
+      frameWidth: width, frameHeight: height, safetyReserveBytes: frameStorage.safetyReserveBytes,
       nextFrame: 0, expectedFrames: frameCount, fps, duration,
       crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
       rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
@@ -737,7 +755,7 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     };
     activeExports.set(event.sender.id, { controller, frameSession: session });
     sendExportProgress(event.sender, { stage: 'rendering', progress: 0, seconds: 0, duration });
-    return { canceled: false, sessionId: session.id, frameCount, fps, duration };
+    return { canceled: false, sessionId: session.id, frameCount, fps, duration, frameFormat: frameStorage.format, estimatedTemporaryBytes: frameStorage.estimatedBytes };
   } catch (error) {
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     throw error;
@@ -752,13 +770,33 @@ ipcMain.handle('frame:write-export-frame', async (event, payload) => {
   if (job.controller.signal.aborted) throw new ExportCanceledError();
   if (Number(payload.frameIndex) !== session.nextFrame) throw new Error(`Invalid frame order: expected ${session.nextFrame}, received ${payload.frameIndex}.`);
   if (!(payload.buffer instanceof ArrayBuffer) || payload.buffer.byteLength < 16 || payload.buffer.byteLength > 64 * 1024 * 1024) {
-    throw new Error('Invalid PNG frame or frame exceeds the 64 MiB limit.');
+    throw new Error('Invalid frame buffer or frame exceeds the 64 MiB limit.');
   }
   const bytes = Buffer.from(payload.buffer);
-  if (!bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) throw new Error('The submitted frame is not a valid PNG.');
-  const filename = path.join(session.tempDir, `frame-${String(session.nextFrame).padStart(8, '0')}.png`);
+  const validPng = bytes.length >= 16 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const validJpeg = bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (session.frameFormat === 'jpeg' ? !validJpeg : !validPng) {
+    throw new Error(`The submitted frame does not match the selected ${session.frameFormat === 'jpeg' ? 'JPEG' : 'PNG'} sequence format.`);
+  }
+  const extension = session.frameFormat === 'jpeg' ? 'jpg' : 'png';
+  const filename = path.join(session.tempDir, `frame-${String(session.nextFrame).padStart(8, '0')}.${extension}`);
   await fs.writeFile(filename, bytes, { flag: 'wx' });
   session.nextFrame += 1;
+  // Keep a modest reserve for FFmpeg's output container and application writes;
+  // stop before a full disk turns the export into an unusable partial file.
+  if (session.nextFrame % Math.max(1, Math.round(session.fps * 5)) === 0 && typeof fs.statfs === 'function') {
+    try {
+      const stats = await fs.statfs(session.tempDir);
+      const free = Number(stats.bavail) * Number(stats.bsize);
+      const requiredReserve = Math.max(MIN_EXPORT_FREE_SPACE_BYTES, Number(session.safetyReserveBytes) || 0);
+      if (Number.isFinite(free) && free < requiredReserve) {
+        throw new Error(`Export stopped before the drive filled up: free space dropped below the estimated output reserve (${(requiredReserve / (1024 ** 3)).toFixed(1)} GiB). Free disk space and try again. Temporary frames will be cleaned up.`);
+      }
+    } catch (error) {
+      if (error?.message?.includes('drive filled up')) throw error;
+      // If a filesystem cannot provide free-space stats, the write itself remains authoritative.
+    }
+  }
   if (session.nextFrame % Math.max(1, Math.round(session.fps / 2)) === 0 || session.nextFrame === session.expectedFrames) {
     sendExportProgress(event.sender, {
       stage: 'rendering', progress: session.nextFrame / session.expectedFrames * 100,
