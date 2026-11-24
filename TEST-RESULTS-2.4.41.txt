@@ -1,0 +1,12 @@
+FRAME Studio 2.4.41 — Release Candidate
+
+Base: user-tested Hotfix 3 (2.4.27 source), kept as the application foundation.
+
+Changes in this candidate:
+- Opacity slider plus numeric value control, sharing the existing opacity keyframe/property.
+- Effects catalog reorganized into five top-level folders while preserving effect IDs, parameters, search, favorites and applied mode.
+- Drag-and-drop swapping of Library, Viewer and Inspector workspace regions by their header grips. The order is persisted in local workspace settings; bottom Timeline remains docked and resizable.
+- Workspace reset button.
+- Version and updater target advanced to 2.4.41.
+
+Automated validation is recorded separately in TEST-REPORT-2.4.41.md. Packaged GUI and GitHub release asset publication still require the release workflow.

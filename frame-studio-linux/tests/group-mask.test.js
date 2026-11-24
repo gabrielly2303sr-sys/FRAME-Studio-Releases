@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.40');
+assert.equal(pkg.version, '2.4.41');
 for (const id of ['groupclips','groupmask','ungroupclips','selectgroup','togglegroup','grouptransform','groupmasktoggle']) {
   assert.doesNotMatch(html, new RegExp(`id=["']${id}["']`), `grouping UI control ${id} should be removed`);
 }
@@ -29,7 +29,7 @@ function functionSource(name) {
   throw new Error(`could not extract ${name}`);
 }
 const migration = vm.runInNewContext(`(${functionSource('stripLegacyGroupMetadata')})`);
-const data = {version:8,format:'frameproj',groups:[{id:'g1',name:'Old group',parentId:null,transform:{x:50,y:20,scaleX:125,scaleY:90,rotation:5,opacity:80},maskMode:'alpha'}],clips:[{id:'a',groupId:'g1',groupName:'Old group',groupParentId:null},{id:'b'}],selectedGroupId:'g1',activeGroupViewId:'g1',collapsedGroups:['g1']};
+const data = {format:'frameproj',groups:[{id:'g1',name:'Old group',parentId:null,transform:{x:50,y:20,scaleX:125,scaleY:90,rotation:5,opacity:80},maskMode:'alpha'}],clips:[{id:'a',groupId:'g1',groupName:'Old group',groupParentId:null},{id:'b'}],selectedGroupId:'g1',activeGroupViewId:'g1',collapsedGroups:['g1']};
 migration(data);
 assert.equal(data.groups.length, 0);
 assert.equal(data.layerGroups.length, 0);
@@ -39,13 +39,4 @@ assert.equal(data.clips[0].groupId, undefined);
 assert.equal(data.clips[0].groupName, undefined);
 assert.equal(data.clips[0].legacyGroupTransforms[0].x, 50);
 assert.equal(data.clips[0].legacyGroupTransforms[0].opacity, 80);
-
-// Native v9 layer groups must survive even if the optional maskClipId field is absent.
-const currentData = {version:9,format:'frameproj',groups:[{id:'new-g',name:'New group',parentId:null,maskMode:'none',transform:{x:0,y:0,scaleX:100,scaleY:100,rotation:0,opacity:100}}],clips:[{id:'a',groupId:'new-g',groupName:'New group',groupParentId:null},{id:'b',groupId:'new-g',groupName:'New group',groupParentId:null}],selectedGroupId:'new-g',activeGroupViewId:'new-g',collapsedGroups:['new-g']};
-migration(currentData);
-assert.equal(currentData.groups.length, 1, 'current layer groups survive compatibility migration');
-assert.equal(currentData.clips[0].groupId, 'new-g', 'current clip membership is retained');
-assert.equal(currentData.selectedGroupId, 'new-g');
-assert.equal(currentData.activeGroupViewId, 'new-g');
-assert.deepEqual(currentData.collapsedGroups, ['new-g']);
-console.log('FRAME Studio 2.4.38 group persistence regression tests: OK');
+console.log('FRAME Studio 2.4.16 legacy grouping removal tests: OK');

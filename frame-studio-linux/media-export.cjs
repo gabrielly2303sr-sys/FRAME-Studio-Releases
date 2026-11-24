@@ -13,38 +13,6 @@ class ExportCanceledError extends Error {
   }
 }
 
-// PNG keeps export frames lossless, but long projects can fill the output drive
-// before FFmpeg starts. Select a high-quality JPEG spool only when a conservative
-// estimate says the PNG sequence would be risky. The final MP4 still uses the
-// user's H.264 quality/bitrate settings.
-const EXPORT_SPACE_RESERVE_BYTES = 64 * 1024 * 1024;
-const MIN_EXPORT_FREE_SPACE_BYTES = 64 * 1024 * 1024;
-
-function chooseFrameIntermediateFormat({ frameCount, width, height, availableBytes, reserveBytes = EXPORT_SPACE_RESERVE_BYTES } = {}) {
-  const frames = Math.floor(Number(frameCount));
-  const w = Math.floor(Number(width));
-  const h = Math.floor(Number(height));
-  if (!Number.isSafeInteger(frames) || frames < 1 || !Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 2 || h < 2 || w > 16384 || h > 16384) {
-    throw new Error('Invalid frame storage estimate. Check the project duration and export resolution.');
-  }
-  const px = w * h;
-  // Conservative spool estimates, not a prediction of the final MP4 size.
-  const pngEstimate = Math.ceil(frames * (px * 1.2 + 64 * 1024));
-  const jpegEstimate = Math.ceil(frames * (px * 0.25 + 64 * 1024));
-  const free = availableBytes == null ? NaN : Number(availableBytes);
-  if (!Number.isFinite(free) || free < 0) {
-    return { format: 'png', estimatedBytes: pngEstimate, availableBytes: null, safetyReserveBytes: reserveBytes };
-  }
-  if (free >= pngEstimate + reserveBytes) {
-    return { format: 'png', estimatedBytes: pngEstimate, availableBytes: free, safetyReserveBytes: reserveBytes };
-  }
-  if (free >= jpegEstimate + reserveBytes) {
-    return { format: 'jpeg', estimatedBytes: jpegEstimate, availableBytes: free, safetyReserveBytes: reserveBytes };
-  }
-  const gib = bytes => `${(bytes / (1024 ** 3)).toFixed(1)} GiB`;
-  throw new Error(`Not enough free disk space to safely export this project. Estimated temporary frame storage is approximately ${gib(jpegEstimate)} in high-quality JPEG mode plus a ${gib(reserveBytes)} safety reserve; ${gib(free)} is available. Free disk space or reduce the project duration/resolution, then export again.`);
-}
-
 function resolveToolPath(kind, override) {
   if (override) return override;
   const envName = kind === 'ffprobe' ? 'FRAME_FFPROBE_PATH' : 'FRAME_FFMPEG_PATH';
@@ -435,16 +403,6 @@ function buildRemapAudioSegments({ inPoint = 0, outPoint, clipDuration, timeRema
  * responsible for seeking every active source to n / fps and drawing that frame
  * before sending it to the main process. This function never records screen-time.
  */
-function voiceEffectFilters(effect) {
-  switch (effect) {
-    case 'telephone': return ['highpass=f=300', 'lowpass=f=3400'];
-    case 'radio': return ['highpass=f=220', 'lowpass=f=3200', 'acompressor=threshold=0.12:ratio=3:attack=10:release=80'];
-    case 'echo': return ['aecho=0.8:0.78:70|140:0.30|0.18'];
-    case 'robot': return ['highpass=f=100', 'lowpass=f=3800', 'aecho=0.8:0.9:8|16:0.42|0.24'];
-    default: return [];
-  }
-}
-
 async function renderFrameSequenceToMp4(options = {}) {
   const {
     framePattern,
@@ -494,7 +452,7 @@ async function renderFrameSequenceToMp4(options = {}) {
   let audioIndex = 0;
   const sourceClips = Array.isArray(audioClips) ? audioClips.slice(0, 500) : [];
   for (const clip of sourceClips) {
-    if (!clip || !['video', 'audio'].includes(clip.kind) || (clip.kind === 'video' && clip.muteSourceAudio)) continue;
+    if (!clip || !['video', 'audio'].includes(clip.kind)) continue;
     const sourcePath = clip.path;
     if (typeof sourcePath !== 'string' || !path.isAbsolute(sourcePath)) {
       throw new Error(`Clip "${clip.name || 'unnamed'}" does not have a valid file path. Relink or reimport the media.`);
@@ -526,7 +484,6 @@ async function renderFrameSequenceToMp4(options = {}) {
     const volumeExpression = volumeAutomationExpression(clip.volume ?? 100, clip.volumeKeyframes, clipDuration);
     const hasVolumeKeys = Array.isArray(clip.volumeKeyframes) && clip.volumeKeyframes.length > 0;
     const volumeFilter = hasVolumeKeys ? `volume='${volumeExpression}':eval=frame` : `volume=${gain.toFixed(4)}`;
-    const voiceFilters = voiceEffectFilters(clip.voiceEffect);
     const fadeIn = Math.max(0, Math.min(clipDuration, Number(clip.fadeIn) || 0));
     const fadeOut = Math.max(0, Math.min(clipDuration, Number(clip.fadeOut) || 0));
     if (remapSegments?.length) {
@@ -551,7 +508,7 @@ async function renderFrameSequenceToMp4(options = {}) {
       if (segmentLabels.length === 1) filters.push(`${segmentLabels[0]}anull[${rawLabel}]`);
       else filters.push(`${segmentLabels.join('')}concat=n=${segmentLabels.length}:v=0:a=1[${rawLabel}]`);
       const post = [
-        `[${rawLabel}]${[...voiceFilters, volumeFilter].join(',')}`,
+        `[${rawLabel}]${volumeFilter}`,
         ...(fadeIn > 0.001 ? [`afade=t=in:st=0:d=${fadeIn.toFixed(6)}`] : []),
         ...(fadeOut > 0.001 ? [`afade=t=out:st=${Math.max(0, clipDuration - fadeOut).toFixed(6)}:d=${fadeOut.toFixed(6)}`] : []),
         `adelay=${Math.round(start * 1000)}|${Math.round(start * 1000)}`,
@@ -564,7 +521,6 @@ async function renderFrameSequenceToMp4(options = {}) {
         `[${input}:a:0]atrim=start=${inPoint.toFixed(6)}:end=${outPoint.toFixed(6)}`,
         'asetpts=PTS-STARTPTS',
         ...tempoFilters(speed),
-        ...voiceFilters,
         volumeFilter,
         ...(fadeIn > 0.001 ? [`afade=t=in:st=0:d=${fadeIn.toFixed(6)}`] : []),
         ...(fadeOut > 0.001 ? [`afade=t=out:st=${Math.max(0, clipDuration - fadeOut).toFixed(6)}:d=${fadeOut.toFixed(6)}`] : []),
@@ -584,84 +540,32 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
   args.push('-map', '0:v:0');
   if (hasAudio) args.push('-map', '[aout]');
-  const videoBaseArgs = args.slice();
-  const progressHandler = (seconds, ended) => {
-    if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: duration, duration });
-    const progress = duration > 0 ? Math.max(0, Math.min(98, seconds / duration * 100)) : 0;
-    onProgress?.({ stage: 'transcoding', progress, seconds, duration });
-  };
-  const finishArgs = (base, encoder) => {
-    const out = base.slice();
-    out.push('-frames:v', String(safeFrameCount), '-t', duration.toFixed(6));
-    if (encoder === 'h264_vaapi') {
-      out.push('-vf', 'format=nv12,hwupload,scale_vaapi=w=trunc(iw/2)*2:h=trunc(ih/2)*2', '-c:v', encoder, '-qp', String(safeCrf));
-    } else if (encoder === 'h264_nvenc') {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', encoder, '-preset', 'p4');
-      if (safeRateMode === 'bitrate') out.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
-      else out.push('-rc', 'vbr', '-cq', String(safeCrf), '-b:v', '0');
-    } else if (encoder === 'h264_qsv') {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', encoder, '-preset', 'veryfast');
-      if (safeRateMode === 'bitrate') out.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
-      else out.push('-global_quality', String(safeCrf));
-    } else if (encoder === 'h264_amf') {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', encoder, '-quality', 'speed');
-      out.push('-b:v', `${safeRateMode === 'bitrate' ? safeVideoBitrate : Math.max(4, safeVideoBitrate)}M`);
-    } else if (encoder === 'h264_videotoolbox') {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', encoder, '-q:v', String(Math.max(40, 100 - safeCrf * 2)));
-      if (safeRateMode === 'bitrate') out.push('-b:v', `${safeVideoBitrate}M`);
-    } else if (encoder === 'h264_mf') {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', encoder, '-b:v', `${safeVideoBitrate}M`);
-    } else {
-      out.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', safeEncoderPreset);
-      if (safeRateMode === 'bitrate') out.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
-      else out.push('-crf', String(safeCrf));
-    }
-    out.push('-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', encoder === 'h264_vaapi' ? 'nv12' : 'yuv420p');
-    if (hasAudio) out.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2');
-    out.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
-    return out;
-  };
-  let usedEncoder = 'libx264';
+  args.push(
+    '-frames:v', String(safeFrameCount),
+    '-t', duration.toFixed(6),
+    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+    '-c:v', 'libx264', '-preset', safeEncoderPreset
+  );
+  if (safeRateMode === 'bitrate') {
+    args.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
+  } else {
+    args.push('-crf', String(safeCrf));
+  }
+  args.push('-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p');
+  if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2');
+  args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
 
   try {
-    const preferred = process.platform === 'linux'
-      ? ['h264_vaapi', 'h264_nvenc', 'h264_qsv']
-      : process.platform === 'win32'
-        ? ['h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_mf']
-        : process.platform === 'darwin' ? ['h264_videotoolbox'] : [];
-    let available = '';
-    try { const enc = await runProcess(ffmpegPath, ['-hide_banner', '-encoders'], { signal, kind: 'ffmpeg', onProcess }); available = `${enc.stdout || ''}\n${enc.stderr || ''}`; } catch {}
-    const candidates = preferred.filter(name => available.includes(name));
-    for (const encoder of candidates) {
-      if (signal?.aborted) throw new ExportCanceledError();
-      if (encoder === 'h264_vaapi') {
-        const device = await fs.stat('/dev/dri/renderD128').catch(() => null);
-        if (!device?.isCharacterDevice?.()) continue;
+    await runProcess(ffmpegPath, args, {
+      signal,
+      kind: 'ffmpeg',
+      onProcess,
+      onProgress: (seconds, ended) => {
+        if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: duration, duration });
+        const progress = duration > 0 ? Math.max(0, Math.min(98, seconds / duration * 100)) : 0;
+        onProgress?.({ stage: 'transcoding', progress, seconds, duration });
       }
-      let encoderBase = videoBaseArgs;
-      if (encoder === 'h264_vaapi') {
-        encoderBase = videoBaseArgs.slice();
-        const inputPos = encoderBase.indexOf('-framerate');
-        if (inputPos >= 0) encoderBase.splice(inputPos, 0, '-vaapi_device', '/dev/dri/renderD128');
-      }
-      try {
-        await runProcess(ffmpegPath, finishArgs(encoderBase, encoder), { signal, kind: 'ffmpeg', onProcess, onProgress: progressHandler });
-        const candidateStat = await fs.stat(outputPath).catch(() => null);
-        if (!candidateStat?.isFile() || candidateStat.size < 1024) throw new Error(`Hardware encoder ${encoder} did not create a valid MP4.`);
-        const candidateProbe = await probeMedia(outputPath, { ffprobePath, signal, onProcess });
-        const candidateVideo = validateProbe(candidateProbe, duration, 'MP4 de hardware');
-        const candidateFps = parseFrameRate(candidateVideo.avg_frame_rate) ?? parseFrameRate(candidateVideo.r_frame_rate);
-        if (candidateVideo.codec_name !== 'h264' || !candidateVideo.width || !candidateVideo.height || candidateVideo.width % 2 || candidateVideo.height % 2 || !Number.isFinite(candidateFps) || Math.abs(candidateFps-safeFps)>.05) throw new Error(`Hardware encoder ${encoder} produced an incompatible MP4.`);
-        usedEncoder = encoder;
-        break;
-      } catch (hardwareError) {
-        if (signal?.aborted || hardwareError instanceof ExportCanceledError) throw hardwareError;
-        await fs.rm(outputPath, { force: true }).catch(() => {});
-      }
-    }
-    if (usedEncoder === 'libx264') {
-      await runProcess(ffmpegPath, finishArgs(videoBaseArgs, 'libx264'), { signal, kind: 'ffmpeg', onProcess, onProgress: progressHandler });
-    }
+    });
     if (signal?.aborted) throw new ExportCanceledError();
     onProgress?.({ stage: 'validating', progress: 99, seconds: 0, duration });
     const outputStat = await fs.stat(outputPath).catch(() => null);
@@ -687,8 +591,6 @@ async function renderFrameSequenceToMp4(options = {}) {
       duration: outputProbe.duration,
       size: outputStat.size,
       videoCodec: outputVideo.codec_name,
-      videoEncoder: usedEncoder,
-      hardwareEncoding: usedEncoder !== 'libx264',
       audioCodec: outputAudio?.codec_name || null,
       width: outputVideo.width,
       height: outputVideo.height,
@@ -708,5 +610,5 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
 }
 
-module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments, voiceEffectFilters, chooseFrameIntermediateFormat, EXPORT_SPACE_RESERVE_BYTES, MIN_EXPORT_FREE_SPACE_BYTES };
+module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
 

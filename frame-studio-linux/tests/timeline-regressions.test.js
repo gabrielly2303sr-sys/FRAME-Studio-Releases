@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '2.4.40');
+assert.equal(pkg.version, '2.4.41');
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 
 // Keep source-time mapping independent of the visual scale and timeline start.
@@ -55,6 +55,9 @@ assert.match(renderer, /className='track-resize-grip'/, 'track resizing has dedi
 assert.doesNotMatch(html, /id=["'](?:groupclips|groupmask|ungroupclips|selectgroup|togglegroup|grouptransform)["']/, 'legacy grouping controls stay removed while the new layer-group actions use their own IDs');
 assert.match(renderer, /function stripLegacyGroupMetadata\(/, 'legacy groups are flattened when older projects are loaded');
 assert.match(renderer, /legacyGroupTransforms/, 'legacy group transforms are retained as per-layer transforms where possible');
+assert.match(renderer, /function clampGroupMoveDeltas\(/, 'multi-clip movement is clamped as a single rigid selection');
+assert.match(dragFn, /targetTrack-startTrack/, 'vertical group movement follows pointer direction');
+assert.doesNotMatch(dragFn, /startTrack-targetTrack/, 'vertical group movement is not inverted');
 assert.match(renderer, /function sourceTimeAt\(c,timelineTime\)/, 'the time-remapping curve drives source-frame selection');
 assert.match(renderer, /function sourceRateAt\(c,timelineTime\)/, 'source-rate calculation supports reverse and frozen sections');
 assert.match(renderer, /case'reverse':points=\[p\(0,1,'linear'\),p\(1,0,'linear'\)\]/, 'Reverse preset maps source end to source start');
