@@ -66,7 +66,9 @@ assert.match(renderer, /document\.createElement\('canvas'\)/, 'a renderização 
 assert.match(renderer, /new MediaRecorder/, 'gravação de microfone deve usar MediaRecorder real');
 assert.match(renderer, /function insertRecordedAudio/, 'workflow de gravação deve inserir o asset real');
 assert.match(renderer, /function extractAudioFromVideo/, 'extração deve estar conectada à timeline');
-assert.match(fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8'), /spawn\(binary, args/, 'FFmpeg/ffprobe devem iniciar com spawn e argumentos separados');
+const mediaExportSource = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
+assert.match(mediaExportSource, /const spawnProcess = typeof options\.spawnImpl === 'function' \? options\.spawnImpl : spawn/, 'produção usa child_process.spawn por padrão e permite injetar um launcher em testes multiplataforma');
+assert.match(mediaExportSource, /child = spawnProcess\(binary, args, \{ stdio: \['ignore', 'pipe', 'pipe'\], windowsHide: true \}\)/, 'FFmpeg/ffprobe recebem argumentos separados e opções padrão de processo');
 assert.match(main, /contextIsolation: true/);
 assert.match(main, /nodeIntegration: false/);
 assert.match(main, /assertTrustedSender/);

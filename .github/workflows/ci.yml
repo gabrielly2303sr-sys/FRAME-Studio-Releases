@@ -1,0 +1,85 @@
+name: Cross-platform test suite
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frame-studio-linux/package-lock.json
+
+      - name: Prepare FFmpeg on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor="$GITHUB_WORKSPACE/frame-studio-linux/vendor/linux"
+          mkdir -p "$vendor"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          download_ok=0
+          for url in \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz" \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+            "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"; do
+            echo "Downloading FFmpeg from $url"
+            if curl -fsSL --retry 4 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "$url" -o "$tmp/ffmpeg.tar.xz"; then
+              download_ok=1
+              break
+            fi
+            echo "Download failed, trying next source..." >&2
+          done
+          test "$download_ok" = "1" || { echo "Could not download FFmpeg from any source." >&2; exit 1; }
+          tar -xJf "$tmp/ffmpeg.tar.xz" -C "$tmp"
+          ffmpeg_path="$(find "$tmp" -type f -name ffmpeg -print -quit)"
+          ffprobe_path="$(find "$tmp" -type f -name ffprobe -print -quit)"
+          test -n "$ffmpeg_path" && test -n "$ffprobe_path"
+          install -m 0755 "$ffmpeg_path" "$vendor/ffmpeg"
+          install -m 0755 "$ffprobe_path" "$vendor/ffprobe"
+          "$vendor/ffmpeg" -version
+          "$vendor/ffprobe" -version
+          echo "$vendor" >> "$GITHUB_PATH"
+          echo "FRAME_FFMPEG_PATH=$vendor/ffmpeg" >> "$GITHUB_ENV"
+          echo "FRAME_FFPROBE_PATH=$vendor/ffprobe" >> "$GITHUB_ENV"
+
+      - name: Prepare FFmpeg on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg-essentials.zip"
+          $unpack = Join-Path $env:RUNNER_TEMP "ffmpeg-essentials"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpack -Force
+          $bin = Get-ChildItem $unpack -Directory | ForEach-Object { Join-Path $_.FullName "bin" } | Where-Object { Test-Path (Join-Path $_ "ffmpeg.exe") } | Select-Object -First 1
+          if (!$bin) { throw "FFmpeg executable was not found in the downloaded archive." }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $bin
+          "FRAME_FFMPEG_PATH=$(Join-Path $bin 'ffmpeg.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FRAME_FFPROBE_PATH=$(Join-Path $bin 'ffprobe.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install dependencies
+        working-directory: frame-studio-linux
+        run: npm ci --no-audit --no-fund
+
+      - name: Run full regression suite
+        working-directory: frame-studio-linux
+        run: npm test
