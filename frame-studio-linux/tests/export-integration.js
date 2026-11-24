@@ -158,15 +158,19 @@ async function main() {
     await fs.writeFile(corrupted, 'não é um vídeo');
     await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /ffprobe failed|metadata|duration/i);
 
-    const fakeFfmpeg = path.join(dir, 'fake-ffmpeg');
-    await fs.writeFile(fakeFfmpeg, '#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n');
-    await fs.chmod(fakeFfmpeg, 0o755);
+    // Use the current Node executable as a portable long-running child. A POSIX
+    // shebang fixture cannot be spawned on Windows runners, so inject only the
+    // process launcher while keeping runProcess's real abort/close handling.
+    const fakeFfmpeg = 'ffmpeg';
+    const spawnAbortable = (_binary, _args, spawnOptions) =>
+      spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);'], spawnOptions);
     const controller = new AbortController();
     const canceledPath = path.join(dir, 'canceled.mp4');
     await assert.rejects(
       transcodeWebmToMp4({
         inputPath: withoutAudio, outputPath: canceledPath, expectedDuration: 1.2,
         ffmpegPath: fakeFfmpeg, signal: controller.signal,
+        spawnImpl: spawnAbortable,
         onProcess: kind => { if (kind === 'ffmpeg') controller.abort(); }
       }),
       error => error.code === 'EXPORT_CANCELED'
@@ -179,6 +183,7 @@ async function main() {
       renderFrameSequenceToMp4({
         framePattern, frameCount: 12, outputPath: canceledSequencePath, fps: 10,
         ffmpegPath: fakeFfmpeg, signal: sequenceController.signal,
+        spawnImpl: spawnAbortable,
         onProcess: kind => { if (kind === 'ffmpeg') sequenceController.abort(); }
       }),
       error => error.code === 'EXPORT_CANCELED'
