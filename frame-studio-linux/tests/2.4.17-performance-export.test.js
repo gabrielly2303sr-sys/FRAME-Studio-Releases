@@ -7,7 +7,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.cjs'), 'utf8');
 const media = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
-assert.equal(pkg.version, '2.4.40');
+assert.equal(pkg.version, '2.4.41');
 assert.match(html, /function schedulePreviewRefinement\(/);
 assert.match(html, /function saveScrubFrameSnapshot\(/);
 assert.match(html, /FAST PREVIEW/);
@@ -33,4 +33,9 @@ assert.match(media, /safeRateMode === 'bitrate'/);
 assert.match(media, /safeVideoBitrate/);
 assert.match(media, /safeAudioBitrate/);
 assert.match(media, /safeEncoderPreset/);
+assert.match(html, /exportEncoderPreset='veryfast'/, 'default encoder preset prioritizes export speed');
+assert.match(main, /payload.encoderPreset\) \? payload.encoderPreset : 'veryfast'/, 'main process uses fast fallback');
+assert.match(media, /encoderPreset = 'veryfast'/, 'media exporter uses fast default');
+assert.match(html, /FRAME Studio export performance profile:/, 'renderer reports per-stage export timing');
+assert.match(html, /window\.lastExportProfile=profileSummary/, 'latest export timing profile is readable from DevTools');
 console.log('FRAME Studio 2.4.17 performance/export checks: OK');

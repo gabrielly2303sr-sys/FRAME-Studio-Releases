@@ -1,33 +1,24 @@
-# FRAME Studio 2.4.40
+# FRAME Studio 2.4.41 — Appearance, Camera Pivot & Timeline Workflow
 
-Compact video editor with a multi-track timeline, keyframes, visual effects, advanced 3D layer transforms, audio tools, and MP4 export.
+This is an incremental update to the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. The source archive available for this update was based on the 2.4.25 source kit; changes that may exist only in remote releases 2.4.26–2.4.30 were not available in this workspace and should be merged from the actual 2.4.30 source before replacing the latest release.
 
-## Run and test
+## Added
+- Appearance accent modes: solid color, animated RGB gradient, and background-adaptive RGB gradient, with saturation, lightness, and speed controls. Background palette sampling falls back safely when an image/video cannot be sampled by the browser.
+- Optional 3D camera look-at pivot, numeric XYZ controls, pivot-at-selected-layer, and orbit navigation around the pivot.
+- Group/ungroup and enter/exit group controls; effect-library selections apply to selected layers, and transform-handle resizing scales multiple selected layers together.
+- Time Remap Freeze Frame · Split: creates before, one-second frozen-frame, and after segments on the same track.
+- End + join: trims a clip at the playhead and closes the following gap on that track.
 
-Requires Node.js 22+.
+## Compatibility and tests
+Older project files remain readable. The added camera pivot fields default when absent. Background-adaptive accent color depends on whether the Electron/Chromium canvas can sample the selected background media.
 
-```bash
+Run from this directory:
+```sh
 npm install --no-audit --no-fund
 npm test
-npm start
 ```
 
-The full suite includes renderer syntax/regression checks, timeline and audio tests, project/update configuration checks, and FFmpeg/ffprobe export integration tests. A passing test suite does not replace visual QA inside a packaged Electron build.
+Automated regression tests pass in this source workspace. A packaged Electron GUI was not launched here, so verify the appearance controls, camera pivot/orbit, multi-layer effects/resizing, freeze split, and end-and-join operation in the actual app before treating the update as fully validated.
 
-## Release builds
-
-- Windows installer with automatic in-place updates: `npm run build:win:installer`
-- Windows portable: `npm run build:win:portable`
-- Linux packages: `npm run build:linux` (AppImage, DEB, RPM)
-
-The GitHub release workflow downloads platform-specific FFmpeg/ffprobe and yt-dlp into `vendor/` before building, so those large generated binaries do not need to be committed. Release metadata includes `latest.yml` for Windows and `latest-linux.yml` for Linux AppImage updates. Publish a GitHub Release tagged `v2.4.40` only after the package version and tag match. Linux AppImage and installed Windows NSIS are the supported automatic in-place update formats; DEB/RPM and portable builds keep their existing distribution update paths.
-
-## 2.4.40 export-safety changes
-
-This release focuses only on MP4 export reliability and older-project compatibility. It adds disk-space preflight/monitoring and an estimated high-quality JPEG intermediate fallback when lossless PNG frame staging would use too much temporary disk space. The saved project schema is unchanged. See the release notes for limitations and validation details.
-
-## Export performance notes
-
-The exporter tries compatible hardware H.264 encoders exposed by the bundled FFmpeg, validates the output, then falls back to CPU `libx264`. Encoder availability and speed vary by OS, GPU, driver, codec settings, and source media. The preview also uses the existing fast-seek/cached-frame paths; timeline auto-scroll avoids re-seeking when the playhead time has not changed. No hardware throughput benchmark or packaged installer build is claimed from this source-only update.
-
-See [RELEASE-NOTES-2.4.40.md](RELEASE-NOTES-2.4.40.md), [TEST-REPORT-2.4.40.md](TEST-REPORT-2.4.40.md), and the repository's [publish instructions](../PUBLISH-2.4.40.md).
+## Release
+The package version is `2.4.41` and should be published with tag `v2.4.41`. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. The source archive available for this local preview was based on the 2.4.25 source kit; confirm/merge any additional changes from intermediate source versions before an official release.

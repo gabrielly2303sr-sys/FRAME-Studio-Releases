@@ -2,16 +2,19 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol, session } = requir
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+// Local preview can opt into an isolated profile so it never overwrites the
+// installed FRAME Studio settings, projects cache, or downloaded-media index.
+if (process.env.FRAME_STUDIO_USER_DATA_DIR && !app.isReady() && (!app.isPackaged || process.env.FRAME_STUDIO_TEST_PREVIEW === '1')) {
+  app.setPath('userData', path.resolve(process.env.FRAME_STUDIO_USER_DATA_DIR));
+}
 const { randomUUID, createHash } = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
 const { createMediaFileResponse } = require('./media-range.cjs');
-const { parseWhisperTranscript } = require('./subtitle-transcript.cjs');
 const { pathToFileURL } = require('node:url');
-const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError, chooseFrameIntermediateFormat, EXPORT_SPACE_RESERVE_BYTES, MIN_EXPORT_FREE_SPACE_BYTES } = require('./media-export.cjs');
+const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
 const activeYoutubeDownloads = new Map();
 const trustedRendererURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
@@ -32,6 +35,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function supportsAutomaticUpdates() {
+  if (process.env.FRAME_STUDIO_DISABLE_UPDATES === '1') return false;
   if (!app.isPackaged) return false;
   if (process.platform === 'win32') {
     // electron-updater supports the installed NSIS build, not electron-builder's portable EXE.
@@ -65,7 +69,6 @@ function setupAutomaticUpdates() {
 
   let promptOpen = false;
   let downloadRequested = false;
-  let pendingUpdateVersion = '';
   let checkInProgress = false;
   let retryTimer = null;
   let retryDelayMs = 45_000;
@@ -99,7 +102,6 @@ function setupAutomaticUpdates() {
     clearRetry();
     retryDelayMs = 45_000;
     if (promptOpen) return;
-    pendingUpdateVersion = String(info?.version || '');
     promptOpen = true;
     try {
       const result = await showMessage({
@@ -114,11 +116,11 @@ function setupAutomaticUpdates() {
       });
       if (result.response === 0) {
         downloadRequested = true;
-        notifyRenderer({ stage: 'downloading', percent: 0, version: pendingUpdateVersion });
+        notifyRenderer({ stage: 'downloading', percent: 0 });
         autoUpdater.downloadUpdate().catch(async error => {
           if (!downloadRequested) return;
           downloadRequested = false;
-          notifyRenderer({ stage: 'error', version: pendingUpdateVersion });
+          notifyRenderer({ stage: 'error' });
           console.error('FRAME Studio update download failed:', error);
           scheduleRetry();
           await showMessage({
@@ -139,13 +141,12 @@ function setupAutomaticUpdates() {
   });
 
   autoUpdater.on('download-progress', progress => {
-    notifyRenderer({ stage: 'downloading', percent: Number(progress?.percent) || 0, version: pendingUpdateVersion });
+    notifyRenderer({ stage: 'downloading', percent: Number(progress?.percent) || 0 });
   });
 
   autoUpdater.on('update-downloaded', async info => {
     downloadRequested = false;
-    pendingUpdateVersion = String(info?.version || pendingUpdateVersion || '');
-    notifyRenderer({ stage: 'downloaded', percent: 100, version: pendingUpdateVersion });
+    notifyRenderer({ stage: 'downloaded', percent: 100 });
     try {
       const result = await showMessage({
         type: 'info',
@@ -173,7 +174,7 @@ function setupAutomaticUpdates() {
       return;
     }
     downloadRequested = false;
-    notifyRenderer({ stage: 'error', version: pendingUpdateVersion });
+    notifyRenderer({ stage: 'error' });
     scheduleRetry();
     showMessage({
       type: 'error',
@@ -703,22 +704,6 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     : extension
       ? path.join(path.dirname(result.filePath), `${path.basename(result.filePath, extension)}.mp4`)
       : `${result.filePath}.mp4`;
-  const width = Math.max(2, Math.min(16384, Math.floor(Number(payload.width) || 1920)));
-  const height = Math.max(2, Math.min(16384, Math.floor(Number(payload.height) || 1080)));
-  let availableBytes = null;
-  try {
-    const stats = await fs.statfs(path.dirname(outputPath));
-    const free = Number(stats.bavail) * Number(stats.bsize);
-    if (Number.isFinite(free) && free >= 0) availableBytes = free;
-  } catch {
-    // Some filesystems/platforms do not report statfs; retain the lossless path.
-  }
-  const pixelStorageEstimate = frameCount * width * height * 0.025;
-  const bitrateOutputEstimate = payload.rateMode === 'bitrate'
-    ? duration * ((Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)) * 1_000_000 + Math.max(96, Math.min(320, Number(payload.audioBitrate) || 192) * 1000)) / 8) * 1.2
-    : 0;
-  const safetyReserveBytes = Math.max(EXPORT_SPACE_RESERVE_BYTES, Math.ceil(pixelStorageEstimate), Math.ceil(bitrateOutputEstimate));
-  const frameStorage = chooseFrameIntermediateFormat({ frameCount, width, height, availableBytes, reserveBytes: safetyReserveBytes });
   const controller = new AbortController();
   let tempDir;
   try {
@@ -736,15 +721,12 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
       timeRemap: Array.isArray(clip?.timeRemap) ? clip.timeRemap.slice(0, 100).map(key => ({ time: Math.max(0, Math.min(1, Number(key?.time) || 0)), value: Math.max(0, Math.min(1, Number(key?.value) || 0)), mode: ['linear', 'smooth', 'hold'].includes(key?.mode) ? key.mode : 'linear', ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
       timeRemapDuration: Math.max(0, Math.min(43200, Number(clip?.timeRemapDuration) || 0)),
       fadeIn: Math.max(0, Math.min(30, Number(clip?.fadeIn) || 0)),
-      fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0)),
-      voiceEffect: ['none', 'telephone', 'radio', 'echo', 'robot'].includes(clip?.voiceEffect) ? clip.voiceEffect : 'none'
+      fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0))
     })) : [];
     const session = {
       id: randomUUID(), controller, tempDir, outputPath,
       temporaryOutputPath: path.join(tempDir, 'rendered.mp4'),
-      framePattern: path.join(tempDir, `frame-%08d.${frameStorage.format === 'jpeg' ? 'jpg' : 'png'}`),
-      frameFormat: frameStorage.format,
-      frameWidth: width, frameHeight: height, safetyReserveBytes: frameStorage.safetyReserveBytes,
+      framePattern: path.join(tempDir, 'frame-%08d.png'),
       nextFrame: 0, expectedFrames: frameCount, fps, duration,
       crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
       rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
@@ -755,7 +737,7 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     };
     activeExports.set(event.sender.id, { controller, frameSession: session });
     sendExportProgress(event.sender, { stage: 'rendering', progress: 0, seconds: 0, duration });
-    return { canceled: false, sessionId: session.id, frameCount, fps, duration, frameFormat: frameStorage.format, estimatedTemporaryBytes: frameStorage.estimatedBytes };
+    return { canceled: false, sessionId: session.id, frameCount, fps, duration };
   } catch (error) {
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     throw error;
@@ -770,33 +752,13 @@ ipcMain.handle('frame:write-export-frame', async (event, payload) => {
   if (job.controller.signal.aborted) throw new ExportCanceledError();
   if (Number(payload.frameIndex) !== session.nextFrame) throw new Error(`Invalid frame order: expected ${session.nextFrame}, received ${payload.frameIndex}.`);
   if (!(payload.buffer instanceof ArrayBuffer) || payload.buffer.byteLength < 16 || payload.buffer.byteLength > 64 * 1024 * 1024) {
-    throw new Error('Invalid frame buffer or frame exceeds the 64 MiB limit.');
+    throw new Error('Invalid PNG frame or frame exceeds the 64 MiB limit.');
   }
   const bytes = Buffer.from(payload.buffer);
-  const validPng = bytes.length >= 16 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  const validJpeg = bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  if (session.frameFormat === 'jpeg' ? !validJpeg : !validPng) {
-    throw new Error(`The submitted frame does not match the selected ${session.frameFormat === 'jpeg' ? 'JPEG' : 'PNG'} sequence format.`);
-  }
-  const extension = session.frameFormat === 'jpeg' ? 'jpg' : 'png';
-  const filename = path.join(session.tempDir, `frame-${String(session.nextFrame).padStart(8, '0')}.${extension}`);
+  if (!bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) throw new Error('The submitted frame is not a valid PNG.');
+  const filename = path.join(session.tempDir, `frame-${String(session.nextFrame).padStart(8, '0')}.png`);
   await fs.writeFile(filename, bytes, { flag: 'wx' });
   session.nextFrame += 1;
-  // Keep a modest reserve for FFmpeg's output container and application writes;
-  // stop before a full disk turns the export into an unusable partial file.
-  if (session.nextFrame % Math.max(1, Math.round(session.fps * 5)) === 0 && typeof fs.statfs === 'function') {
-    try {
-      const stats = await fs.statfs(session.tempDir);
-      const free = Number(stats.bavail) * Number(stats.bsize);
-      const requiredReserve = Math.max(MIN_EXPORT_FREE_SPACE_BYTES, Number(session.safetyReserveBytes) || 0);
-      if (Number.isFinite(free) && free < requiredReserve) {
-        throw new Error(`Export stopped before the drive filled up: free space dropped below the estimated output reserve (${(requiredReserve / (1024 ** 3)).toFixed(1)} GiB). Free disk space and try again. Temporary frames will be cleaned up.`);
-      }
-    } catch (error) {
-      if (error?.message?.includes('drive filled up')) throw error;
-      // If a filesystem cannot provide free-space stats, the write itself remains authoritative.
-    }
-  }
   if (session.nextFrame % Math.max(1, Math.round(session.fps / 2)) === 0 || session.nextFrame === session.expectedFrames) {
     sendExportProgress(event.sender, {
       stage: 'rendering', progress: session.nextFrame / session.expectedFrames * 100,
@@ -840,7 +802,6 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
     return {
       canceled: false, filePath: session.outputPath, size: metadata.size,
       duration: metadata.duration, videoCodec: metadata.videoCodec,
-      videoEncoder: metadata.videoEncoder, hardwareEncoding: metadata.hardwareEncoding,
       audioCodec: metadata.audioCodec, fps: metadata.fps,
       frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true
     };
@@ -1115,64 +1076,6 @@ ipcMain.handle('frame:select-media', async (event) => {
   return { canceled: false, paths: result.filePaths };
 });
 
-
-ipcMain.handle('frame:select-whisper-executable', async (event) => {
-  assertTrustedSender(event);
-  const win = BrowserWindow.fromWebContents(event.sender);
-  const filters = process.platform === 'win32' ? [{ name: 'Whisper CLI', extensions: ['exe'] }] : [{ name: 'Whisper executable', extensions: ['*'] }];
-  const result = await dialog.showOpenDialog(win, { title: 'Choose whisper-cli executable', properties: ['openFile'], filters });
-  if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
-  const filePath = result.filePaths[0];
-  const stat = await fs.stat(filePath).catch(() => null);
-  if (!stat?.isFile()) throw new Error('Whisper executable not found.');
-  return { canceled: false, path: filePath };
-});
-
-ipcMain.handle('frame:select-whisper-model', async (event) => {
-  assertTrustedSender(event);
-  const win = BrowserWindow.fromWebContents(event.sender);
-  const result = await dialog.showOpenDialog(win, { title: 'Choose local Whisper GGML/GGUF model', properties: ['openFile'], filters: [{ name: 'Whisper model', extensions: ['bin', 'gguf', 'ggml'] }, { name: 'All files', extensions: ['*'] }] });
-  if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
-  const filePath = result.filePaths[0];
-  const stat = await fs.stat(filePath).catch(() => null);
-  if (!stat?.isFile() || stat.size < 1024 * 1024) throw new Error('The selected file does not look like a Whisper model.');
-  return { canceled: false, path: filePath };
-});
-
-ipcMain.handle('frame:transcribe-audio', async (event, payload) => {
-  assertTrustedSender(event);
-  const sourcePath = payload?.path, whisperPath = payload?.whisperPath, modelPath = payload?.modelPath;
-  for (const [label, value] of [['audio/video', sourcePath], ['whisper-cli', whisperPath], ['Whisper model', modelPath]]) {
-    if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error(`Invalid ${label} path.`);
-    const stat = await fs.stat(value).catch(() => null);
-    if (!stat?.isFile()) throw new Error(`${label} file does not exist.`);
-  }
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'frame-whisper-'));
-  const wavPath = path.join(tempDir, 'source-16khz.wav');
-  const outputBase = path.join(tempDir, 'transcript');
-  const run = (command, args, options = {}) => new Promise((resolve, reject) => {
-    let child, stderr = '', settled = false;
-    const finish = (fn, value) => { if (settled) return; settled = true; fn(value); };
-    try { child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true }); }
-    catch (error) { finish(reject, error); return; }
-    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-12000); });
-    const timeout = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} finish(reject, new Error(`${options.label || 'Process'} timed out.`)); }, options.timeout || 45 * 60 * 1000);
-    child.once('error', error => { clearTimeout(timeout); finish(reject, new Error(`${options.label || 'Process'} could not start: ${error.message}`)); });
-    child.once('close', code => { clearTimeout(timeout); if (code !== 0) return finish(reject, new Error(stderr.trim() || `${options.label || 'Process'} exited with code ${code}`)); finish(resolve); });
-  });
-  try {
-    const ffmpeg = mediaToolCommand('ffmpeg');
-    if (!ffmpeg) throw new Error(missingBundledToolMessage('ffmpeg'));
-    await run(ffmpeg, ['-y', '-v', 'error', '-i', sourcePath, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], { label: 'FFmpeg audio extraction', timeout: 20 * 60 * 1000 });
-    await run(whisperPath, ['-m', modelPath, '-f', wavPath, '-l', 'auto', '-oj', '-of', outputBase, '--no-gpu'], { label: 'Whisper transcription' });
-    const jsonPath = `${outputBase}.json`;
-    const raw = JSON.parse(await fs.readFile(jsonPath, 'utf8'));
-    return parseWhisperTranscript(raw);
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-  }
-});
-
 ipcMain.handle('frame:select-custom-background', async (event) => {
   assertTrustedSender(event);
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -1344,6 +1247,15 @@ ipcMain.handle('frame:open-path', async (event, target) => {
   assertTrustedSender(event);
   if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error('Invalid path.');
   return shell.openPath(target);
+});
+
+ipcMain.handle('frame:reveal-path', async (event, target) => {
+  assertTrustedSender(event);
+  if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error('Invalid file path.');
+  const stat = await fs.stat(target).catch(() => null);
+  if (!stat?.isFile()) throw new Error('The exported file does not exist.');
+  shell.showItemInFolder(target);
+  return { revealed: true };
 });
 
 ipcMain.handle('frame:downloaded-media-list', async (event, relativeFolder) => {

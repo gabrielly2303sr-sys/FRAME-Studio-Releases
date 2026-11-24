@@ -15,18 +15,18 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.40', 'package version');
+assert.equal(pkg.version, '2.4.41', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
   'data-panel="effects"', 'data-panel="anim"', 'data-panel="3d"',
   'id="cam3denabled"', 'id="camkeyall"', 'id="masktype"', 'id="maskFeather"', 'id="shakepreset"', 'id="easingprop"', 'id="homeScreen"', 'id="updatedialog"', 'id="addtrack"', 'data-camkey="lens"',
   'id="opencustompresets"', 'id="replacemedia"', 'id="presetdialog"', 'id="presetFilter"', 'id="presetCategory"', 'id="presetScope"', 'id="timeremapsection"', 'id="timeremapkey"', 'id="timeremapgraph"', 'id="remappreset-freeze"', 'id="remappreset-reverse"', 'id="remappreset-freeze-point"', 'id="timeremapinterpolation"', 'function drawTimeRemapGraph(c,points)', 'function saveCustomPreset()', 'function applyCustomPreset()', 'function renameCustomPreset()', 'function deleteCustomPreset()', 'function copySelectedClips()', 'function pasteClips()', 'function replaceSelectedMedia()', 'function sourceTimeAt(c,', 'function sourceRateAt(c,', 'timeRemap:[]', 'copy:copySelectedClips,paste:pasteClips',
-  'selectedIds=new Set()', 'suppressClipClickId', 'function effectPreviewScale', 'volumeKeyframes:clip.keyframes?.volume||[]', 'What should the TOTAL maximum number of video tracks be?',
+  'selectedIds=new Set()', 'suppressClipClickId', 'function effectPreviewScale', 'volumeKeyframes:clip.keyframes?.volume||[]', 'const next=Math.min(MAX_VIDEO_TRACKS,Math.max(videoTrackCount+1,videoTrackCount*2))',
   'data-handle=\"rotateX3d\"', 'data-handle=\"rotateY3d\"', 'data-handle=\"rotateZ3d\"', 'timeline-snap-indicator', 'frame-recent-projects',
   'data-prop="rgbSplit"', 'data-prop="waveAmp"', 'data-prop="oscX"',
   'data-prop="exposure"', 'data-prop="gamma"', 'data-prop="chromaKey"',
-  'id="cameaseprop"', 'data-camera-ease="smooth"', 'camera-tween-segment', 'getTweenSegments', 'migrateLegacyLayerTracks', 'findEmptyVideoTrack', 'timelineTargetTrack', 'camera-keylane-empty', 'target-track', 'version:9', 'migrateLegacyLayerTracks', 'id="camedetailcurve"', 'function updateCameraEaseUI()', 'function applyCameraEase(name)', 'function writeCameraPoseAtPlayhead(pose)', 'visible.left+1,visible.right-1', 'playheadDrag.pointerX', 'requestAnimationFrame(updateAtPointer)', 'blankClickSelection', 'Seleção limpa', 'trackrow-video-even', 'TRACK_ROW_HEIGHT=36', 'videoTrackCount=6', "target.closest('#app')", 'Crie um keyframe para esta propriedade da câmera',
+  'id="cameaseprop"', 'data-camera-ease="smooth"', 'camera-tween-segment', 'getTweenSegments', 'migrateLegacyLayerTracks', 'findEmptyVideoTrack', 'timelineTargetTrack', 'camera-keylane-empty', 'target-track', 'version:10', 'migrateLegacyLayerTracks', 'id="camedetailcurve"', 'function updateCameraEaseUI()', 'function applyCameraEase(name)', 'function writeCameraPoseAtPlayhead(pose)', 'visible.left+1,visible.right-1', 'lockedScrollLeft', 'blankClickSelection', 'Seleção limpa', 'trackrow-video-even', 'TRACK_ROW_HEIGHT=36', 'videoTrackCount=6', "target.closest('#app')", 'Crie um keyframe para esta propriedade da câmera',
   'data-camera-action="orbit-left"', 'function drawLayer3D', 'function drawTexturedTriangle',
   'id="importfonts"', 'data-panel="shadow"', 'function drawWaveformCanvas', 'function requestWaveform', 'function withDropShadow', 'function initWorkspaceResizers', 'function resetWorkspaceLayout', 'function groupSelectedClips', 'function toggleGroupCollapse', 'group-collapse-toggle', 'function importCustomFonts', 'fadeIn:clip.fadeIn||0',
   'application/x-frame-asset', 'frameAPI.checkExportTools', 'frameAPI.beginFrameExport', 'frameAPI.writeExportFrame', 'frameAPI.finishFrameExport', 'onExportProgress'
@@ -43,7 +43,7 @@ for (const required of [
   'id="cameraviewmode"', 'id="camerablurenabled"', 'id="camerablurintensity"',
   'id="colorizeenabled"', 'id="gradientenabled"', 'id="blendmode"',
   'function updateLayerFill(', 'function maskGeometryForClip(', 'function updateMaskTransformOverlay(',
-  'groups:layerGroups', 'version:9', '.tl-scroll{overflow:auto', '.timeline{overscroll-behavior:contain', 'function zoomTimelineAtPointer(', 'function timelineTrackGeometry(', 'function applyTrackLayoutOnly(', 'function sceneCameraBasis(', 'function sceneProjectPoint(', 'function attachSceneViewportNavigation(', 'function renderSceneCameraGizmo(', 'id="recordaudio"', 'id="extractaudio"', 'frameAPI.generateWaveform', 'frameAPI.saveAudioRecording', 'frameAPI.extractAudio'
+  'groups:layerGroups', 'version:10', '.tl-scroll{overflow:auto', '.timeline{overscroll-behavior:contain', 'function zoomTimelineAtPointer(', 'function timelineTrackGeometry(', 'function applyTrackLayoutOnly(', 'function sceneCameraBasis(', 'function sceneProjectPoint(', 'function attachSceneViewportNavigation(', 'function renderSceneCameraGizmo(', 'id="recordaudio"', 'id="extractaudio"', 'frameAPI.generateWaveform', 'frameAPI.saveAudioRecording', 'frameAPI.extractAudio'
 ]) assert.ok(html.includes(required), `integração 2.4.16 ausente: ${required}`);
 assert.doesNotMatch(renderer, /if\(track>0\)timelineTargetTrack=track/, 'arrastar mídia não pode prender o destino nas próximas inserções');
 assert.match(renderer, /const timelineDrop=async\(e\)=>\{[\s\S]*?addClip\(a,\{start:x,\.\.\.\(track===null\?\{\}:\{track\}\)\}\);/, 'drop de mídia normal ou da biblioteca persistente deve passar a faixa como destino só desta inserção');
@@ -96,6 +96,19 @@ vm.runInContext('syncMedia(false)', playbackContext);
 assert.equal(endedMedia.playCalls, 0, 'um source no fim do clipe não deve ser reiniciado repetidamente');
 assert.equal(endedMedia.paused, true, 'o source deve manter-se parado enquanto a timeline continua');
 assert.ok(Math.abs(endedMedia.currentTime - (1 - 0.25/30)) < 0.002, 'o source deve ficar no último frame seguro');
+
+// A video's audio mirror must keep playing even when a visual layer sits above it.
+const layeredVideo = { id:'video-layer', assetId:'asset-audio-mirror', kind:'video', track:1, start:0, inPoint:0, outPoint:8, speed:1, volume:100, fadeIn:0, fadeOut:0, timeRemap:[] };
+const occludingImage = { id:'image-overlay', assetId:'still-overlay', kind:'image', track:2, start:0, inPoint:0, outPoint:8, speed:1 };
+const videoElement = makeMedia(.75,false), audioMirrorElement = makeMedia(.75,false);
+const audioMirrorContext = vm.createContext({
+  activeAt:()=>[layeredVideo,occludingImage], assets:[{id:'asset-audio-mirror',name:'layered.mp4',kind:'video',duration:8,el:videoElement,audioEl:audioMirrorElement}], trackSettings:{}, playhead:1, playing:true, offlineRendering:false, previewMode:'timeline',
+  projectFPS:30, playbackEpoch:3, mediaPlayErrors:new Set(), clamp:(n,a,b)=>Math.max(a,Math.min(b,n)), sourceRateAt:c=>Number(c.speed)||1, sourceTimeAt:(c,t)=>Number(c.inPoint)+(t-Number(c.start))*(Number(c.speed)||1),
+  Number, Math, setStatus:text=>audioMirrorContext.statuses.push(text), statuses:[], $:()=>({textContent:''})
+});
+vm.runInContext(syncBlock,audioMirrorContext);vm.runInContext('syncMedia(true)',audioMirrorContext);
+assert.equal(videoElement.playCalls,1,'o elemento visual continua reproduzindo para decodificar frames');
+assert.equal(audioMirrorElement.playCalls,1,'o áudio do vídeo deve continuar independente da imagem que o cobre');
 
 // A real HTMLMediaElement `ended` event must not turn off the project clock.
 const endedHandlerBlock = renderer.match(/function handleMediaEnded\(asset\)\{[\s\S]*?\n\}\nfunction seekVideoPreviewTo/)?.[0].replace(/\nfunction seekVideoPreviewTo$/, '');
@@ -347,6 +360,8 @@ const center = vm.runInContext('cameraProject({x:0,y:0,z:0})', cameraContext);
 assert.ok(center && Math.abs(center.x - 640) < 0.01 && Math.abs(center.y - 360) < 0.01, 'a câmera padrão deve projetar a origem no centro do canvas');
 const offset = vm.runInContext('cameraProject({x:100,y:0,z:0})', cameraContext);
 assert.ok(offset && offset.x > center.x, 'deslocamento X no mundo deve ser projetado à direita');
+const pivotProjection = vm.runInContext('camera3d.orbitPivotEnabled=true;camera3d.pivotX=100;camera3d.pivotY=60;camera3d.pivotZ=20;cameraProject({x:100,y:60,z:20})', cameraContext);
+assert.ok(pivotProjection && Math.abs(pivotProjection.x-640)<0.01 && Math.abs(pivotProjection.y-360)<0.01, 'a câmera com pivot deve mirar o alvo como uma órbita ao redor do Sol');
 const cameraAnimation = vm.runInContext(`camera3d.keyframes.lens=[{time:0,value:50,ease:${JSON.stringify(linear)}},{time:1,value:100,ease:${JSON.stringify(linear)}}];playhead=.5;cameraAtTime(playhead).lens`, cameraContext);
 assert.ok(Math.abs(cameraAnimation - 75) < 0.01, `distância focal deve interpolar keyframes; recebeu ${cameraAnimation}`);
 
@@ -509,7 +524,6 @@ migrationContext.data = sequentialV6;
 assert.equal(vm.runInContext('migrateLegacyLayerTracks(data)', migrationContext), false, 'clipes sequenciais na mesma faixa de um projeto atual devem ser preservados');
 assert.deepEqual(sequentialV6.clips.map(clip=>clip.track), [2,2], 'a migração não deve redistribuir cortes sequenciais válidos');
 const easingMigrationContext = vm.createContext({ MAX_VIDEO_TRACKS: 32, Number, Object, Math, clamp: (n,a,b)=>Math.max(a,Math.min(b,n)), defaultCamera3d:()=>({}) });
-vm.runInContext(helperLine('migrateLegacyClipRanges'), easingMigrationContext);
 vm.runInContext(helperLine('migrateLegacyEasing'), easingMigrationContext);
 easingMigrationContext.data = {version:6,videoTrackCount:6,clips:[]};
 vm.runInContext('migrateLegacyEasing(data)', easingMigrationContext);

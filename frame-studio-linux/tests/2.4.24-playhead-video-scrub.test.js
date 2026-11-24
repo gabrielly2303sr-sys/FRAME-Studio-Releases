@@ -67,6 +67,7 @@ function fakeVideo({ currentTime = 0, seeking = false, readyState = 2 } = {}) {
   const begin = html.match(/function beginPlayheadDrag\(ev\)\{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(begin, /playing=false;playStarting=false;playbackEpoch\+\+;lastFrame=0/);
   assert.match(begin, /settleTimelineVideoSeeksAtPlayhead\(\)/);
+  assert.match(begin, /addEventListener\('blur',blur,true\)/, 'playhead drag is cleaned up when the window loses focus');
   const attach = html.match(/function attachTimelineVideoPreviewEvents\(asset,el\)\{([^\n]+)/)?.[1] || '';
   assert.match(attach, /activeAt\(playhead\)/);
   assert.match(attach, /invalidateVideoPreviewTexture\(asset\.id\)/);
