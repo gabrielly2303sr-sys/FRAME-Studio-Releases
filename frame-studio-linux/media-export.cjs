@@ -218,6 +218,8 @@ async function checkMediaTools(options = {}) {
   return { available: ffmpeg.available && ffprobe.available, ffmpeg, ffprobe, message };
 }
 
+/* Output -r performs CFR frame duplication/drop while remaining compatible with FFmpeg 4.4
+ * (the minimum version used by the Ubuntu 22.04 CI runner). Newer-only -fps_mode is unnecessary. */
 async function transcodeWebmToMp4(options) {
   const {
     inputPath,
@@ -253,7 +255,7 @@ async function transcodeWebmToMp4(options) {
       '-map_metadata', '-1',
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(safeCrf),
       '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-      '-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p'
+      '-r', String(safeFps), '-pix_fmt', 'yuv420p'
     );
     if (hasAudio) args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
     args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
@@ -555,7 +557,7 @@ async function renderFrameSequenceToMp4(options = {}) {
   } else {
     args.push('-crf', String(safeCrf));
   }
-  args.push('-r', String(safeFps), '-fps_mode', 'cfr', '-pix_fmt', 'yuv420p');
+  args.push('-r', String(safeFps), '-pix_fmt', 'yuv420p');
   if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2');
   args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
 
