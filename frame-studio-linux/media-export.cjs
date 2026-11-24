@@ -62,7 +62,8 @@ function runProcess(binary, args, options = {}) {
       child.once('close', () => clearTimeout(forceKill));
     };
     try {
-      child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const spawnProcess = typeof options.spawnImpl === 'function' ? options.spawnImpl : spawn;
+      child = spawnProcess(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     } catch (error) {
       settle(reject, executableError(kind, error));
       return;
@@ -228,7 +229,8 @@ async function transcodeWebmToMp4(options) {
     onProgress,
     onProcess,
     ffmpegPath = resolveToolPath('ffmpeg'),
-    ffprobePath = resolveToolPath('ffprobe')
+    ffprobePath = resolveToolPath('ffprobe'),
+    spawnImpl
   } = options || {};
   if (!inputPath || !outputPath) throw new Error('Input and output paths are required.');
   if (signal?.aborted) throw new ExportCanceledError();
@@ -260,6 +262,7 @@ async function transcodeWebmToMp4(options) {
       signal,
       kind: 'ffmpeg',
       onProcess,
+      spawnImpl,
       onProgress: (seconds, ended) => {
         if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: expectedDuration, duration: expectedDuration });
         const denominator = expectedDuration > 0 ? expectedDuration : inputProbe.duration;
@@ -420,7 +423,8 @@ async function renderFrameSequenceToMp4(options = {}) {
     onProgress,
     onProcess,
     ffmpegPath = resolveToolPath('ffmpeg'),
-    ffprobePath = resolveToolPath('ffprobe')
+    ffprobePath = resolveToolPath('ffprobe'),
+    spawnImpl
   } = options;
   if (!framePattern || !outputPath) throw new Error('A frame sequence and MP4 output path are required.');
   const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));
@@ -560,6 +564,7 @@ async function renderFrameSequenceToMp4(options = {}) {
       signal,
       kind: 'ffmpeg',
       onProcess,
+      spawnImpl,
       onProgress: (seconds, ended) => {
         if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: duration, duration });
         const progress = duration > 0 ? Math.max(0, Math.min(98, seconds / duration * 100)) : 0;
