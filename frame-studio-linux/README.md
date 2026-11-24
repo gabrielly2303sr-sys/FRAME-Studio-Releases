@@ -1,24 +1,18 @@
-# FRAME Studio 2.4.41 — Appearance, Camera Pivot & Timeline Workflow
+# FRAME Studio 2.4.42
 
-This is an incremental update to the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. The source archive available for this update was based on the 2.4.25 source kit; changes that may exist only in remote releases 2.4.26–2.4.30 were not available in this workspace and should be merged from the actual 2.4.30 source before replacing the latest release.
+This release continues the Hotfix 3-based application source and includes the workspace, Effects and opacity improvements, plus cross-platform export/CI compatibility fixes.
 
-## Added
-- Appearance accent modes: solid color, animated RGB gradient, and background-adaptive RGB gradient, with saturation, lightness, and speed controls. Background palette sampling falls back safely when an image/video cannot be sampled by the browser.
-- Optional 3D camera look-at pivot, numeric XYZ controls, pivot-at-selected-layer, and orbit navigation around the pivot.
-- Group/ungroup and enter/exit group controls; effect-library selections apply to selected layers, and transform-handle resizing scales multiple selected layers together.
-- Time Remap Freeze Frame · Split: creates before, one-second frozen-frame, and after segments on the same track.
-- End + join: trims a clip at the playhead and closes the following gap on that track.
+## Build and test
 
-## Compatibility and tests
-Older project files remain readable. The added camera pivot fields default when absent. Background-adaptive accent color depends on whether the Electron/Chromium canvas can sample the selected background media.
-
-Run from this directory:
 ```sh
-npm install --no-audit --no-fund
+npm ci --no-audit --no-fund
 npm test
 ```
 
-Automated regression tests pass in this source workspace. A packaged Electron GUI was not launched here, so verify the appearance controls, camera pivot/orbit, multi-layer effects/resizing, freeze split, and end-and-join operation in the actual app before treating the update as fully validated.
+## Release packaging and automatic updates
 
-## Release
-The package version is `2.4.41` and should be published with tag `v2.4.41`. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. The source archive available for this local preview was based on the 2.4.25 source kit; confirm/merge any additional changes from intermediate source versions before an official release.
+The repository GitHub Actions release workflow builds Windows NSIS/portable packages and Linux AppImage, DEB and RPM packages. It also generates and attaches the Windows updater metadata `latest.yml` and Linux AppImage updater metadata `latest-linux.yml`.
+
+In-place automatic updates are supported for installed Windows NSIS and Linux AppImage builds. The updater uses the GitHub Releases provider configured in `package.json`; it checks after startup and periodically, and offers the update after a newer published release and its assets/metadata are available. DEB/RPM packages are updated through the relevant package manager, and portable Windows builds do not use the NSIS in-place updater.
+
+See the root `RELEASE-NOTES-2.4.42.md` and `TEST-REPORT-2.4.42.md` for details and validation status.

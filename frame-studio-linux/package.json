@@ -1,6 +1,6 @@
 {
   "name": "frame-studio",
-  "version": "2.4.41",
+  "version": "2.4.42",
   "private": true,
   "description": "FRAME Studio video editor — Hotfix 3 stable base with dockable workspace, organized effects and layer opacity controls",
   "main": "main.cjs",

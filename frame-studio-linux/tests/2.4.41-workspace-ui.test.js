@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const renderer=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1]||'';
-assert.equal(pkg.version,'2.4.41');
+assert.equal(pkg.version,'2.4.42');
 assert.match(html,/id="opacityrange"[^>]*data-prop="opacity"[^>]*type="range"/,'opacity slider is visible and bound to the clip property');
 assert.match(html,/id="opacitynumber"[^>]*data-prop="opacity"[^>]*type="number"/,'opacity remains numerically editable');
 assert.match(html,/data-key="opacity"/,'opacity supports keyframes');
@@ -34,4 +34,4 @@ assert.equal(ctx.frameEffectFolder({category:'Color & Adjustment'}),'Color & Cor
 assert.equal(ctx.frameEffectFolder({category:'Texture'}),'Texture & Style');
 assert.equal(ctx.frameEffectFolder({category:'Camera'}),'Motion & Camera');
 new vm.Script(renderer,{filename:'renderer-inline.js'});
-console.log('FRAME Studio 2.4.41 workspace/effects/opacity UI: OK');
+console.log('FRAME Studio 2.4.42 workspace/effects/opacity UI: OK');
