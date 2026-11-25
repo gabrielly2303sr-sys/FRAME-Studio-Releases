@@ -230,11 +230,11 @@ async function copyValidatedWebm(options = {}) {
     const inputProbe = await probeMedia(inputPath, { ffprobePath, signal, onProcess });
     const inputVideo = validateProbe(inputProbe, expectedDuration, 'Temporary WebM capture');
     if (!['vp8', 'vp9', 'av1'].includes(inputVideo.codec_name)) {
-      throw new Error(\`WebM export contains an unsupported video codec: \${inputVideo.codec_name || 'unknown'}.\`);
+      throw new Error(`WebM export contains an unsupported video codec: ${inputVideo.codec_name || 'unknown'}.`);
     }
     const inputAudio = inputProbe.streams.find(stream => stream.codec_type === 'audio');
     if (inputAudio && !['opus', 'vorbis'].includes(inputAudio.codec_name)) {
-      throw new Error(\`WebM export contains an unsupported audio codec: \${inputAudio.codec_name || 'unknown'}.\`);
+      throw new Error(`WebM export contains an unsupported audio codec: ${inputAudio.codec_name || 'unknown'}.`);
     }
     if (signal?.aborted) throw new ExportCanceledError();
     await fs.copyFile(inputPath, outputPath);
@@ -283,11 +283,11 @@ async function transcodeWebmToFormat(options = {}) {
     if (hasAudio) args.push('-map', '0:a:0');
     args.push('-map_metadata', '-1', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-r', String(safeFps), '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', safeEncoderPreset);
     if (safeRateMode === 'bitrate') {
-      args.push('-b:v', \`\${safeVideoBitrate}M\`, '-maxrate', \`\${Math.round(safeVideoBitrate * 1.35)}M\`, '-bufsize', \`\${Math.round(safeVideoBitrate * 2)}M\`);
+      args.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
     } else {
       args.push('-crf', String(safeCrf));
     }
-    if (hasAudio) args.push('-c:a', 'aac', '-b:a', \`\${safeAudioBitrate}k\`, '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
+    if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
     if (safeFormat === 'mp4' || safeFormat === 'mov') args.push('-movflags', '+faststart');
     args.push('-progress', 'pipe:1', '-nostats', outputPath);
 
@@ -303,17 +303,17 @@ async function transcodeWebmToFormat(options = {}) {
     if (signal?.aborted) throw new ExportCanceledError();
     onProgress?.({ stage: 'validating', progress: 99, seconds: 0, duration: expectedDuration });
     const outputStat = await fs.stat(outputPath).catch(() => null);
-    if (!outputStat?.isFile() || outputStat.size < 1024) throw new Error(\`FFmpeg did not generate a valid \${safeFormat.toUpperCase()} file (the file is empty or too small).\`);
+    if (!outputStat?.isFile() || outputStat.size < 1024) throw new Error(`FFmpeg did not generate a valid ${safeFormat.toUpperCase()} file (the file is empty or too small).`);
     const outputProbe = await probeMedia(outputPath, { ffprobePath, signal, onProcess });
-    const outputVideo = validateProbe(outputProbe, expectedDuration, \`O \${safeFormat.toUpperCase()} exportado\`);
-    if (outputVideo.codec_name !== 'h264') throw new Error(\`Unexpected video codec: \${outputVideo.codec_name || 'unknown'}; expected H.264.\`);
-    if (!outputVideo.width || !outputVideo.height || outputVideo.width % 2 || outputVideo.height % 2) throw new Error(\`The exported \${safeFormat.toUpperCase()} has dimensions invalid for H.264/yuv420p.\`);
+    const outputVideo = validateProbe(outputProbe, expectedDuration, `O ${safeFormat.toUpperCase()} exportado`);
+    if (outputVideo.codec_name !== 'h264') throw new Error(`Unexpected video codec: ${outputVideo.codec_name || 'unknown'}; expected H.264.`);
+    if (!outputVideo.width || !outputVideo.height || outputVideo.width % 2 || outputVideo.height % 2) throw new Error(`The exported ${safeFormat.toUpperCase()} has dimensions invalid for H.264/yuv420p.`);
     const outputAudio = outputProbe.streams.find(stream => stream.codec_type === 'audio');
-    if (hasAudio && outputAudio?.codec_name !== 'aac') throw new Error(\`Unexpected audio codec: \${outputAudio?.codec_name || 'missing'}; expected AAC.\`);
-    if (!hasAudio && outputAudio) throw new Error(\`The \${safeFormat.toUpperCase()} contains an unexpected audio stream although the capture has no audio.\`);
+    if (hasAudio && outputAudio?.codec_name !== 'aac') throw new Error(`Unexpected audio codec: ${outputAudio?.codec_name || 'missing'}; expected AAC.`);
+    if (!hasAudio && outputAudio) throw new Error(`The ${safeFormat.toUpperCase()} contains an unexpected audio stream although the capture has no audio.`);
     const actualFps = parseFrameRate(outputVideo.avg_frame_rate) ?? parseFrameRate(outputVideo.r_frame_rate);
     if (!Number.isFinite(actualFps) || Math.abs(actualFps - safeFps) > 0.1) {
-      throw new Error(\`Unexpected output FPS: \${Number.isFinite(actualFps) ? actualFps.toFixed(3) : 'unknown'}; expected \${safeFps} FPS.\`);
+      throw new Error(`Unexpected output FPS: ${Number.isFinite(actualFps) ? actualFps.toFixed(3) : 'unknown'}; expected ${safeFps} FPS.`);
     }
     if (signal?.aborted) throw new ExportCanceledError();
     onProgress?.({ stage: 'validating', progress: 100, seconds: outputProbe.duration, duration: outputProbe.duration });
