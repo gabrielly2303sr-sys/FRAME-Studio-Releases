@@ -192,7 +192,7 @@ async function main() {
 
     const corrupted = path.join(dir, 'not-a-video.webm');
     await fs.writeFile(corrupted, 'não é um vídeo');
-    await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /ffprobe failed|metadata|duration/i);
+    await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /empty or missing|ffprobe failed|metadata|duration/i);
 
     // Use the current Node executable as a portable long-running child. A POSIX
     // shebang fixture cannot be spawned on Windows runners, so inject only the
