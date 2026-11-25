@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const renderer=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1]||'';
-assert.equal(pkg.version,'2.4.44');
+assert.equal(pkg.version,'2.4.45');
 assert.match(html,/id="opacityrange"[^>]*data-prop="opacity"[^>]*type="range"/,'opacity slider is visible and bound to the clip property');
 assert.match(html,/id="opacitynumber"[^>]*data-prop="opacity"[^>]*type="number"/,'opacity remains numerically editable');
 assert.match(html,/data-key="opacity"/,'opacity supports keyframes');
@@ -31,6 +31,8 @@ for(const folder of ['Blur & Distortion','Light & Glow','Color & Correction','Te
 assert.match(renderer,/function renderEffectLibrary\(\)/);
 const getFunction=(name)=>{const start=renderer.indexOf(`function ${name}(`);assert.ok(start>=0,`${name} exists`);const brace=renderer.indexOf('{',start);let depth=0,quote=null,escape=false;for(let i=brace;i<renderer.length;i++){const c=renderer[i];if(quote){if(escape)escape=false;else if(c==='\\')escape=true;else if(c===quote)quote=null}else{if(c==='"'||c==="'"||c==='`')quote=c;else if(c==='{')depth++;else if(c==='}'&&--depth===0)return renderer.slice(start,i+1)}}throw new Error(`function end missing: ${name}`)};
 const contextTabs=getFunction('updateContextTabs');
+assert.ok(contextTabs.includes("$('.itab').forEach("),'inspector tab visibility iterates all tabs via querySelectorAll');
+assert.ok(contextTabs.includes("$('.panel').forEach("),'inspector panel states iterate all panels via querySelectorAll');
 assert.match(contextTabs,/kind==='video'\)show=\['transform','color','mask','effects','anim','time','3d','shadow','audio'\]\.includes\(t\)/,'video clips expose the Audio inspector tab');
 assert.match(contextTabs,/kind==='video'\?\['transform','color','mask','effects','anim','time','3d','shadow','audio'\]/,'video clips enable the Audio inspector panel');
 const ctx=vm.createContext({String,Array});
@@ -42,4 +44,4 @@ assert.equal(ctx.frameEffectFolder({category:'Color & Adjustment'}),'Color & Cor
 assert.equal(ctx.frameEffectFolder({category:'Texture'}),'Texture & Style');
 assert.equal(ctx.frameEffectFolder({category:'Camera'}),'Motion & Camera');
 new vm.Script(renderer,{filename:'renderer-inline.js'});
-console.log('FRAME Studio 2.4.44 playhead/audio/workspace UI: OK');
+console.log('FRAME Studio 2.4.45 inspector/workspace UI: OK');
