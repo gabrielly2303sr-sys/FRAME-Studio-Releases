@@ -1730,7 +1730,10 @@ async function prepareVideoFramesAt(t){
 }
 function canvasPngBlob(){return new Promise((resolve,reject)=>{try{canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('O canvas não conseguiu codificar o frame PNG.')),'image/png')}catch(error){reject(error)}})}
 function exportProgressListener(data){
- if(data?.stage==='rendering'){
+ if(data?.stage==='capturing'){
+  const pct=Math.max(0,Math.min(99,Math.round(data.progress||0)));
+  $('#export').textContent='Capturando…';setStatus('Captura em tempo real · '+pct+'%');
+ }else if(data?.stage==='rendering'){
   const pct=Math.max(0,Math.min(99,Math.round(data.progress||0)));
   $('#export').textContent=`Frames ${pct}%`;setStatus(`Deterministic render · ${pct}% (${Number(data.seconds||0).toFixed(2)} / ${Number(data.duration||0).toFixed(2)} s)`);
  }else if(data?.stage==='transcoding'){
@@ -1740,7 +1743,7 @@ function exportProgressListener(data){
   $('#export').textContent='Validando…';setStatus('Validando codecs e duração com ffprobe…');
  }
 }
-async function exportProject(){
+async function exportProjectFrameAccurate(){
  if(!clips.length)return message('Adicione pelo menos um clipe antes de exportar');
  if(!window.frameAPI?.isDesktop||!window.frameAPI?.beginFrameExport||!window.frameAPI?.writeExportFrame||!window.frameAPI?.finishFrameExport)return message('A renderização determinística requer o FRAME Studio desktop atualizado.');
  if(recording||exportStarting)return;
@@ -1807,7 +1810,7 @@ async function exportProject(){
   if(sessionId&&window.frameAPI?.cancelFrameExport){try{await window.frameAPI.cancelFrameExport(sessionId)}catch{}}
   const wasCancelled=exportCancelled||error?.code==='EXPORT_CANCELED';publishExportProfile(wasCancelled?'cancelled':'failed',{projectSeconds:typeof totalDuration==='number'?totalDuration:0,error:error?.message||error});
   if(wasCancelled){setStatus('Exportação cancelada');message('Exportação cancelada')}
-  else{setStatus('Falha na exportação MP4');message(`Erro ao exportar MP4: ${error?.message||error}`)}
+  else{console.error('FRAME Studio deterministic export failed:',error,{profile:window.lastExportProfile});setStatus('Falha na exportação MP4');message(`Erro ao exportar MP4: ${error?.message||error}`)}
  }finally{
   unsubscribe?.();offlineRendering=false;recording=false;exportStarting=false;exportStage='idle';playing=false;playStarting=false;playbackEpoch++;sourcePlaybackEpoch++;sourcePlaying=false;lastFrame=0;
   canvas=previewCanvas;ctx=canvas.getContext('2d');
@@ -1817,9 +1820,145 @@ async function exportProject(){
   playhead=clamp(originalPlayhead,0,extent());syncMedia(true);drawPreview();
   $('#play').textContent='▶';$('#export').textContent='↗ Exportar MP4';$('#export').disabled=false;$('#exportcancel').disabled=false;$('#exportcancel').classList.add('hidden');
  }
+}idden');
+ }
+}
+async function exportProject() {
+ if(exportMode==='frame-accurate'){
+  if(exportFormat!=='mp4')return message('O modo frame a frame atualmente exporta MP4. Escolha MP4 ou use o modo em tempo real para MOV, MKV e WebM.');
+  return exportProjectFrameAccurate();
+ }
+ if(!clips.length)return message('Adicione pelo menos um clipe antes de exportar');
+ if(!window.frameAPI?.isDesktop||!window.frameAPI?.beginRealtimeExport||!window.frameAPI?.writeRealtimeExportChunk||!window.frameAPI?.finishRealtimeExport)return message('A captura em tempo real requer uma versão desktop atualizada do FRAME Studio.');
+ if(recording||exportStarting)return;
+ const totalDuration=endTime();
+ if(!Number.isFinite(totalDuration)||totalDuration<=0)return message('A composição não tem duração válida para exportar.');
+ if(typeof MediaRecorder==='undefined'||typeof previewCanvas.captureStream!=='function'){
+  if(exportFormat==='mp4')return exportProjectFrameAccurate();
+  return message('Este ambiente não oferece captura em tempo real. Use MP4 no modo frame a frame.');
+ }
+ exportStarting=true;exportCancelled=false;playing=false;playStarting=false;playbackEpoch++;sourcePlaying=false;sourcePlaybackEpoch++;lastFrame=0;
+ const originalPlayhead=playhead,fps=Math.max(1,Math.min(120,Math.round(Number(projectFPS)||30)));
+ let sessionId=null,unsubscribe=null,recorder=null,canvasStream=null,combinedStream=null,writeQueue=Promise.resolve(),chunkIndex=0,chunkError=null,recorderError=null,stopPromise=null;
+ let startedAt=0,recorderStarted=false;
+ const profile={format:exportFormat,mode:'realtime',duration:totalDuration,fps,startedAt:performance.now(),captureBytes:0,chunks:0};
+ const stopTracks=stream=>{try{stream?.getTracks?.().forEach(track=>{try{track.stop()}catch{}})}catch{}};
+ const stopRecorder=async()=>{
+  if(recorder&&recorder.state!=='inactive')try{recorder.stop()}catch(error){recorderError=recorderError||error}
+  if(stopPromise)try{await stopPromise}catch{}
+ };
+ $('#export').disabled=true;$('#exportcancel').classList.remove('hidden');$('#exportcancel').disabled=false;
+ $('#export').textContent='Preparando captura…';setStatus('Preparando áudio e pré-visualização…');
+ try{
+  const tools=await window.frameAPI.checkExportTools();
+  if(!tools?.available)throw new Error(tools?.message||'FFmpeg/ffprobe não estão disponíveis neste pacote.');
+  if(previewMode!=='timeline'){$('#previewmode').value='timeline';previewMode='timeline'}
+  canvas=previewCanvas;ctx=canvas.getContext('2d');
+  await ensureFontsReady();
+  await ensureAudio();
+  const timelineAudioClips=clips.filter(clip=>{
+   if(!['video','audio'].includes(clip.kind)||trackSettings[clip.track]?.hidden||duration(clip)<=0)return false;
+   const asset=assets.find(item=>item.id===clip.assetId);
+   return !!(asset&&!asset.missing&&(clip.kind==='audio'||asset.hasAudio||asset.el?.audioTracks?.length));
+  });
+  const baseName=(($('#projectname').value||'frame-project').trim().replace(/[\/:*?"<>|]+/g,'-')||'frame-project');
+  const session=await window.frameAPI.beginRealtimeExport({
+   name:baseName+'.'+exportFormat,duration:totalDuration,fps,format:exportFormat,crf:exportCRF,
+   rateMode:exportRateMode,videoBitrate:exportVideoBitrate,encoderPreset:exportEncoderPreset,audioBitrate:exportAudioBitrate
+  });
+  if(session?.canceled){message('Exportação cancelada');setStatus('Exportação cancelada');return}
+  if(!session?.sessionId)throw new Error('O processo principal não devolveu uma sessão de captura válida.');
+  sessionId=session.sessionId;activeExportSessionId=sessionId;
+  canvasStream=previewCanvas.captureStream(fps);
+  const videoTracks=canvasStream.getVideoTracks();
+  if(!videoTracks.length)throw new Error('O canvas não forneceu uma faixa de vídeo para captura.');
+  const tracks=[...videoTracks];
+  if(timelineAudioClips.length){
+   const audioTracks=audioDestination?.stream?.getAudioTracks?.()||[];
+   if(!audioTracks.length)throw new Error('O áudio do projeto não pôde ser conectado ao gravador.');
+   tracks.push(...audioTracks);
+  }
+  combinedStream=new MediaStream(tracks);
+  const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'];
+  const mimeType=candidates.find(type=>MediaRecorder.isTypeSupported?.(type));
+  if(!mimeType)throw new Error('Este Electron não oferece um codec WebM compatível com MediaRecorder.');
+  const videoBits=exportRateMode==='bitrate'
+   ?Math.round(Math.max(2,Math.min(100,Number(exportVideoBitrate)||12))*1000000)
+   :Math.round(Math.max(4,Math.min(35,({16:25,18:18,20:13,23:8,24:7,28:4}[Number(exportCRF)]||12)))*1000000);
+  const recorderOptions={mimeType,videoBitsPerSecond:videoBits,audioBitsPerSecond:Math.max(96000,Math.min(320000,Number(exportAudioBitrate)||192)*1000)};
+  try{recorder=new MediaRecorder(combinedStream,recorderOptions)}
+  catch(firstError){try{recorder=new MediaRecorder(combinedStream,{mimeType})}catch(secondError){throw new Error('Não foi possível iniciar MediaRecorder: '+(secondError?.message||firstError?.message||secondError))}}
+  stopPromise=new Promise((resolve,reject)=>{
+   recorder.addEventListener('stop',resolve,{once:true});
+   recorder.addEventListener('error',event=>{recorderError=event.error||new Error('MediaRecorder falhou durante a captura');reject(recorderError)},{once:true});
+  });
+  stopPromise.catch(()=>{});
+  recorder.addEventListener('dataavailable',event=>{
+   if(!event.data||!event.data.size||!sessionId)return;
+   const thisIndex=chunkIndex++;
+   writeQueue=writeQueue.then(async()=>{
+    const buffer=await event.data.arrayBuffer();
+    const result=await window.frameAPI.writeRealtimeExportChunk(sessionId,thisIndex,buffer);
+    profile.captureBytes=Number(result?.bytesWritten)||profile.captureBytes+buffer.byteLength;
+    profile.chunks=thisIndex+1;
+   }).catch(error=>{chunkError=chunkError||error});
+  });
+  unsubscribe=window.frameAPI.onExportProgress?.(exportProgressListener);
+  setPlayhead(0);drawPreview();
+  recorder.start(1000);recorderStarted=true;startedAt=performance.now();
+  playing=true;playStarting=false;playbackEpoch++;lastFrame=0;lastPreviewRender=0;$('#play').textContent='Ⅱ';
+  syncMedia(true);
+  $('#export').textContent='Capturando…';setStatus('Capturando o playback em tempo real · '+fps+' FPS');
+  await new Promise((resolve,reject)=>{
+   const check=()=>{
+    if(exportCancelled)return reject(Object.assign(new Error('Exportação cancelada.'),{code:'EXPORT_CANCELED'}));
+    if(chunkError)return reject(chunkError);
+    if(recorderError)return reject(recorderError);
+    if(!playing||playhead>=totalDuration-.002)return resolve();
+    if(performance.now()-startedAt>(totalDuration+15)*1000)return reject(new Error('A captura excedeu o tempo limite de segurança.'));
+    requestAnimationFrame(check);
+   };
+   check();
+  });
+  playing=false;playStarting=false;playbackEpoch++;syncMedia(true);
+  await stopRecorder();recorderStarted=false;await writeQueue;
+  if(chunkError)throw chunkError;
+  if(recorderError)throw recorderError;
+  if(exportCancelled)throw Object.assign(new Error('Exportação cancelada.'),{code:'EXPORT_CANCELED'});
+  if(!profile.chunks||profile.captureBytes<1024)throw new Error('MediaRecorder terminou sem produzir um vídeo válido.');
+  $('#export').textContent='Codificando '+exportFormat.toUpperCase()+'…';setStatus('Captura concluída · validando e finalizando '+exportFormat.toUpperCase()+'…');
+  const encodeStart=performance.now();
+  const result=await window.frameAPI.finishRealtimeExport(sessionId);
+  sessionId=null;activeExportSessionId=null;
+  if(result?.canceled){setStatus('Exportação cancelada');message('Exportação cancelada');return}
+  profile.encodeSeconds=Number(((performance.now()-encodeStart)/1000).toFixed(2));
+  profile.elapsedSeconds=Number(((performance.now()-profile.startedAt)/1000).toFixed(2));
+  profile.realTimeFactor=profile.elapsedSeconds>0?Number((Number(result.duration||totalDuration)/profile.elapsedSeconds).toFixed(2)):0;
+  profile.status='completed';profile.fileBytes=result.size;profile.videoCodec=result.videoCodec;profile.audioCodec=result.audioCodec;profile.fps=result.fps;
+  window.lastExportProfile=profile;
+  console.info('FRAME Studio realtime export profile:',profile);
+  setStatus(result.format.toUpperCase()+' validated · '+Number(result.duration).toFixed(2)+' s · '+profile.elapsedSeconds+' s de captura/conversão');
+  if(result.filePath&&window.frameAPI?.revealPath){try{await window.frameAPI.revealPath(result.filePath)}catch(revealError){console.warn('FRAME Studio: não foi possível abrir a pasta da exportação:',revealError?.message||revealError)}}
+  message('Exportação concluída · '+result.format.toUpperCase()+' · '+(result.videoCodec||'vídeo')+(result.audioCodec?' + '+result.audioCodec:' sem áudio'));
+ }catch(error){
+  const cancelled=exportCancelled||error?.code==='EXPORT_CANCELED';
+  profile.status=cancelled?'cancelled':'failed';profile.error=error?.message||String(error);profile.elapsedSeconds=Number(((performance.now()-profile.startedAt)/1000).toFixed(2));window.lastExportProfile=profile;
+  console.error('FRAME Studio export failed:',{...profile,error});
+  if(cancelled){setStatus('Exportação cancelada');message('Exportação cancelada')}
+  else{setStatus('Falha na exportação '+exportFormat.toUpperCase());message('Erro ao exportar '+exportFormat.toUpperCase()+': '+(error?.message||error))}
+  if(sessionId&&window.frameAPI?.cancelRealtimeExport){try{await window.frameAPI.cancelRealtimeExport(sessionId)}catch(cancelError){console.error('FRAME Studio export cleanup failed:',cancelError)}}
+ }finally{
+  if(recorderStarted)await stopRecorder();
+  stopTracks(canvasStream);stopTracks(combinedStream);
+  unsubscribe?.();playing=false;playStarting=false;playbackEpoch++;sourcePlaybackEpoch++;sourcePlaying=false;lastFrame=0;
+  canvas=previewCanvas;ctx=canvas.getContext('2d');offlineRendering=false;recording=false;exportStarting=false;exportStage='idle';activeExportSessionId=null;
+  assets.forEach(asset=>{if(asset.el&&['video','audio'].includes(asset.kind)){try{asset.el.pause()}catch{}}if(asset.audioEl){try{asset.audioEl.pause()}catch{}}});
+  playhead=clamp(originalPlayhead,0,extent());syncMedia(true);drawPreview();
+  $('#play').textContent='▶';$('#export').textContent='↗ Exportar';$('#export').disabled=false;$('#exportcancel').disabled=false;$('#exportcancel').classList.add('hidden');
+ }
 }
 $('#export').addEventListener('click',exportProject);
-$('#exportcancel').addEventListener('click',async()=>{if(!recording&&!exportStarting)return;exportCancelled=true;setStatus('Cancelando exportação…');$('#exportcancel').disabled=true;window.frameAPI?.cancelExport?.();if(activeExportSessionId&&window.frameAPI?.cancelFrameExport){try{await window.frameAPI.cancelFrameExport(activeExportSessionId)}catch{}}});
+$('#exportcancel').addEventListener('click',async()=>{if(!recording&&!exportStarting)return;exportCancelled=true;setStatus('Cancelando exportação…');$('#exportcancel').disabled=true;if(exportMode==='realtime'&&activeExportSessionId&&window.frameAPI?.cancelRealtimeExport){try{await window.frameAPI.cancelRealtimeExport(activeExportSessionId)}catch(error){console.error('FRAME Studio realtime cancellation failed:',error)}}else{window.frameAPI?.cancelExport?.();if(activeExportSessionId&&window.frameAPI?.cancelFrameExport){try{await window.frameAPI.cancelFrameExport(activeExportSessionId)}catch{}}}});
 
 $('#files').addEventListener('change',()=>{});
 window.addEventListener('beforeunload',()=>{assets.forEach(a=>{try{if(a.el&&a.el.pause)a.el.pause();if(a.audioEl?.pause)a.audioEl.pause();URL.revokeObjectURL(a.url)}catch(e){}})});
