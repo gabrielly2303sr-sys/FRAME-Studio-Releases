@@ -10,7 +10,7 @@ Run npm ci --no-audit --no-fund and npm test from this directory.
 
 ## Release packaging and automatic updates
 
-The GitHub Actions release workflow builds Windows NSIS/portable packages and Linux AppImage, DEB and RPM packages, and attaches the updater metadata. In-place automatic updates remain supported for installed Windows NSIS and Linux AppImage builds; DEB/RPM packages update through their package managers.
+The GitHub Actions release workflow builds Windows NSIS/portable packages and Linux AppImage, DEB and RPM packages, and attaches the updater metadata. It generates and publishes the Windows updater manifest `latest.yml` and the Linux AppImage manifest `latest-linux.yml`. In-place automatic updates remain supported for installed Windows NSIS and Linux AppImage builds; DEB/RPM packages update through their package managers.
 
 Realtime capture follows playback and may drop frames under heavy system load. Use the frame-accurate MP4 mode for precision-sensitive exports; projects containing Time Remap automatically use that path.
 
