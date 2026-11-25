@@ -1,3 +1,15 @@
+# 2.4.45 — Inspector Hotfix
+
+### Fixed
+- Fixed Uncaught TypeError: $(...).forEach is not a function in updateContextTabs().
+- Use $$('.itab') and $$('.panel') to iterate all matching Inspector tabs and panels.
+- Added regression assertions for the collection-returning selector helper.
+
+### Compatibility
+- Retains the 2.4.44 realtime export pipeline, output containers, fullscreen viewer and playhead hit-area changes.
+
+---
+
 # 2.4.44 — Realtime Export & Viewer
 
 ### Added

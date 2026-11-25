@@ -5,7 +5,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.equal(packageJson.version, '2.4.44');
+assert.equal(packageJson.version, '2.4.45');
 assert.match(html, /<div class="toast" id="toast" role="status" aria-live="polite"><\/div>/, 'toast host exists before renderer initialization');
 assert.match(html, /function message\(t\)\{[^}]*if\(!el\)/, 'message handles a missing toast element without throwing');
 assert.match(html, /function setStatus\(t\)\{const el=\$\('\#status'\);if\(el\)/, 'status updates are guarded');

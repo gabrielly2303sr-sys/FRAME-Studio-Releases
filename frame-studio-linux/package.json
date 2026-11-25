@@ -1,6 +1,6 @@
 {
   "name": "frame-studio",
-  "version": "2.4.44",
+  "version": "2.4.45",
   "private": true,
   "description": "FRAME Studio video editor — realtime capture export, multiple containers, fullscreen viewer and timeline fixes",
   "main": "main.cjs",

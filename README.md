@@ -1,14 +1,17 @@
-# FRAME Studio 2.4.44
+# FRAME Studio 2.4.45
 
-Hotfix 3-derived maintenance release focused on faster realtime capture export, additional output containers, better export diagnostics, viewer fullscreen and timeline playhead usability.
+Hotfix for an Inspector crash caused by iterating a single DOM element as though it were a collection.
 
-Export formats: MP4, WebM, MOV and MKV. Realtime capture is the default; MP4 retains a frame-accurate mode for projects requiring deterministic rendering and Time Remap fidelity.
+## Fixed
+- Inspector context-tab visibility now uses the multi-element selector helper for all .itab elements.
+- Inspector panel enable/disable state now uses the multi-element selector helper for all .panel elements.
+- Added a regression assertion so both collection iterations must use $$(), while $() remains reserved for one-element lookups.
 
-The GitHub Release workflow builds Windows NSIS/portable packages and Linux AppImage/DEB/RPM packages, then attaches updater metadata. Automatic in-place updates remain supported for Windows NSIS and Linux AppImage installations.
+The 2.4.44 realtime export, MP4/WebM/MOV/MKV containers, fullscreen viewer and playhead improvements are retained.
 
-See:
-- RELEASE-NOTES-2.4.44.md
-- TEST-REPORT-2.4.44.md
-- PUBLISH-2.4.44.md
+## Build and test
+Run npm ci --no-audit --no-fund and npm test from frame-studio-linux/.
 
-A release is not considered published until CI passes and GitHub Actions attaches the installers and updater metadata.
+See RELEASE-NOTES-2.4.45.md, TEST-REPORT-2.4.45.md and PUBLISH-2.4.45.md.
+
+Do not publish until cross-platform CI passes and release assets and updater manifests are verified.

@@ -1,3 +1,11 @@
+# 2.4.45 — Inspector Hotfix
+
+- Fixed the Inspector TypeError $(...).forEach is not a function by using the collection-returning $$() helper for .itab and .panel iteration in updateContextTabs().
+- Added regression assertions for both collection queries.
+- Preserved the 2.4.44 realtime export, fullscreen viewer, and playhead changes.
+
+---
+
 # 2.4.40
 
 - Focused MP4 export stability and backwards-compatibility fixes.
