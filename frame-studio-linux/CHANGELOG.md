@@ -1,3 +1,11 @@
+# 2.4.43
+
+### Fixed
+- Timeline playhead remains draggable after timeline redraws; the pointer handler is attached whenever the playhead DOM node is recreated.
+- Video clips now expose and enable the Audio inspector panel for clip volume, fades and volume keyframes.
+- Application title, visible version badge and home footer now match the package version.
+- The release-version consistency test is now included in `npm test`.
+
 # Changelog
 
 ## 2.4.27 — Local test preview (not yet released)
