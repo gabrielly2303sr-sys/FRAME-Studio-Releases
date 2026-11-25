@@ -1,12 +1,14 @@
-# FRAME Studio 2.4.43
+# FRAME Studio 2.4.44
 
-Hotfix 3-based maintenance release fixing timeline playhead dragging, video clip audio controls and app version labels. Preserves the workspace, Effects, opacity and existing timeline/group fixes.
+Hotfix 3-derived maintenance release focused on faster realtime capture export, additional output containers, better export diagnostics, viewer fullscreen and timeline playhead usability.
 
-The GitHub Release workflow builds Windows NSIS/portable packages and Linux AppImage/DEB/RPM packages, then attaches updater metadata. In-place automatic updates are supported for Windows NSIS and Linux AppImage installations.
+Export formats: MP4, WebM, MOV and MKV. Realtime capture is the default; MP4 retains a frame-accurate mode for projects requiring deterministic rendering and Time Remap fidelity.
+
+The GitHub Release workflow builds Windows NSIS/portable packages and Linux AppImage/DEB/RPM packages, then attaches updater metadata. Automatic in-place updates remain supported for Windows NSIS and Linux AppImage installations.
 
 See:
-- `RELEASE-NOTES-2.4.43.md`
-- `TEST-REPORT-2.4.43.md`
-- `PUBLISH-2.4.43.md`
+- RELEASE-NOTES-2.4.44.md
+- TEST-REPORT-2.4.44.md
+- PUBLISH-2.4.44.md
 
-A release is not considered published until GitHub Actions attaches the installers and updater metadata to the GitHub Release.
+A release is not considered published until CI passes and GitHub Actions attaches the installers and updater metadata.
