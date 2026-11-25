@@ -1,12 +1,12 @@
 {
   "name": "frame-studio",
-  "version": "2.4.43",
+  "version": "2.4.44",
   "private": true,
-  "description": "FRAME Studio video editor — Hotfix 3 stable base with playhead and video audio inspector fixes",
+  "description": "FRAME Studio video editor — realtime capture export, multiple containers, fullscreen viewer and timeline fixes",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/smoke.js && node tests/release-version.test.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/layer-group-persistence.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.16-animation-effects.test.js && node tests/2.4.16-advanced-effects.test.js && node tests/2.4.17-performance-export.test.js && node tests/2.4.18-live-preview-downloader.test.js && node tests/2.4.19-downloaded-media.test.js && node tests/2.4.20-bundled-tools-text-shortcuts.test.js && node tests/2.4.21-bundled-tools-autoprepare.test.js && node tests/2.4.23-media-tool-validation.test.js && node tests/2.4.24-playhead-video-scrub.test.js && node tests/media-range.test.js && node tests/2.4.27-preview-regression.test.js && node tests/marquee-export-reveal.test.js && node tests/2.4.27-electron-toast-dialog-profile.test.js && node tests/2.4.41-workspace-ui.test.js",
+    "test": "node tests/smoke.js && node tests/realtime-export.test.js && node tests/release-version.test.js && node tests/customization.test.js && node tests/editor-interactions.test.js && node tests/audio-tools.test.js && node tests/timeline-regressions.test.js && node tests/group-mask.test.js && node tests/layer-group-persistence.test.js && node tests/time-remap.test.js && node tests/export-integration.js && node tests/auto-update.test.js && node tests/2.4.16-animation-effects.test.js && node tests/2.4.16-advanced-effects.test.js && node tests/2.4.17-performance-export.test.js && node tests/2.4.18-live-preview-downloader.test.js && node tests/2.4.19-downloaded-media.test.js && node tests/2.4.20-bundled-tools-text-shortcuts.test.js && node tests/2.4.21-bundled-tools-autoprepare.test.js && node tests/2.4.23-media-tool-validation.test.js && node tests/2.4.24-playhead-video-scrub.test.js && node tests/media-range.test.js && node tests/2.4.27-preview-regression.test.js && node tests/marquee-export-reveal.test.js && node tests/2.4.27-electron-toast-dialog-profile.test.js && node tests/2.4.41-workspace-ui.test.js",
     "build:win": "electron-builder --win nsis portable --publish never",
     "build:linux": "electron-builder --linux AppImage deb rpm --publish never",
     "build": "electron-builder",
