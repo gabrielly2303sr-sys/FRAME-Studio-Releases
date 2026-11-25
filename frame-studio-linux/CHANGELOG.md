@@ -1,3 +1,27 @@
+# 2.4.44 — Realtime Export & Viewer
+
+### Added
+- Realtime canvas + project-audio capture using MediaRecorder, removing the per-frame PNG/IPC/temp-file path from the default export mode.
+- WebM native capture output and validated MP4, MOV and MKV H.264/AAC conversions.
+- Fullscreen preview viewer and a wider playhead drag target.
+
+### Improved
+- MP4 frame-accurate mode remains available and is selected automatically for projects with Time Remap.
+- Final containers are probed before being moved to the selected output path.
+- Export failures now include detailed DevTools console diagnostics.
+
+### Compatibility
+- Hotfix 3-derived timeline, groups, effects, opacity, video audio Inspector and updater behavior are retained.
+- Realtime mode follows playback and may drop frames under load; frame-accurate mode is for precision-sensitive MP4 output.
+
+# 2.4.43
+
+### Fixed
+- Timeline playhead remains draggable after timeline redraws; the pointer handler is attached whenever the playhead DOM node is recreated.
+- Video clips now expose and enable the Audio inspector panel for clip volume, fades and volume keyframes.
+- Application title, visible version badge and home footer now match the package version.
+- The release-version consistency test is now included in `npm test`.
+
 # Changelog
 
 ## 2.4.27 — Local test preview (not yet released)

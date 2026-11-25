@@ -14,7 +14,7 @@ const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
 const { createMediaFileResponse } = require('./media-range.cjs');
 const { pathToFileURL } = require('node:url');
-const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
+const { checkMediaTools, probeMedia, transcodeWebmToMp4, transcodeWebmToFormat, copyValidatedWebm, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
 const activeExports = new Map();
 const activeYoutubeDownloads = new Map();
 const trustedRendererURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
@@ -672,6 +672,143 @@ ipcMain.handle('frame:check-export-tools', async event => {
 ipcMain.on('frame:cancel-export', event => {
   try { assertTrustedSender(event); } catch { return; }
   activeExports.get(event.sender.id)?.controller.abort();
+});
+
+// Realtime export: capture the already-composited preview and mixed project audio.
+// This avoids one seek + PNG encode + PNG IPC + disk write for every output frame.
+ipcMain.handle('frame:begin-realtime-export', async (event, payload) => {
+  assertTrustedSender(event);
+  if (activeExports.has(event.sender.id)) throw new Error('An export is already running in this window.');
+  const format = ['mp4', 'webm', 'mov', 'mkv'].includes(String(payload?.format || '').toLowerCase())
+    ? String(payload.format).toLowerCase() : 'mp4';
+  const duration = Number(payload?.duration);
+  const fps = Math.max(1, Math.min(120, Math.round(Number(payload?.fps) || 30)));
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 43200) {
+    throw new Error('Invalid export duration. The project must be between 0 and 12 hours.');
+  }
+  const safeBase = String(payload.name || 'frame-studio-export')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+    .replace(/\.(?:webm|mp4|mov|mkv)$/i, '').slice(0, 150) || 'frame-studio-export';
+  const extension = format;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const filters = {
+    mp4: [{ name: 'MP4 Video · H.264 + AAC', extensions: ['mp4'] }],
+    webm: [{ name: 'WebM Video · VP8/VP9 + Opus', extensions: ['webm'] }],
+    mov: [{ name: 'QuickTime MOV · H.264 + AAC', extensions: ['mov'] }],
+    mkv: [{ name: 'Matroska MKV · H.264 + AAC', extensions: ['mkv'] }]
+  };
+  const result = await dialog.showSaveDialog(win, {
+    title: 'Export composition to ' + format.toUpperCase(),
+    defaultPath: path.join(app.getPath('videos'), safeBase + '.' + extension),
+    filters: filters[format]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  const selectedExtension = path.extname(result.filePath);
+  const outputPath = selectedExtension.toLowerCase() === '.' + extension
+    ? result.filePath
+    : selectedExtension
+      ? path.join(path.dirname(result.filePath), path.basename(result.filePath, selectedExtension) + '.' + extension)
+      : result.filePath + '.' + extension;
+  const controller = new AbortController();
+  let tempDir;
+  try {
+    tempDir = await fs.mkdtemp(path.join(path.dirname(outputPath), '.frame-studio-realtime-'));
+    const session = {
+      id: randomUUID(), controller, tempDir, outputPath, format, fps, duration,
+      capturePath: path.join(tempDir, 'capture.webm'),
+      temporaryOutputPath: path.join(tempDir, 'rendered.' + extension),
+      nextChunk: 0, bytesWritten: 0,
+      crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
+      rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
+      videoBitrate: Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)),
+      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'veryfast',
+      audioBitrate: [96, 128, 160, 192, 256, 320].includes(Number(payload.audioBitrate)) ? Number(payload.audioBitrate) : 192
+    };
+    activeExports.set(event.sender.id, { controller, realtimeSession: session });
+    sendExportProgress(event.sender, { stage: 'capturing', progress: 0, seconds: 0, duration });
+    return { canceled: false, sessionId: session.id, format, fps, duration, outputPath };
+  } catch (error) {
+    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+});
+
+ipcMain.handle('frame:write-realtime-export-chunk', async (event, payload) => {
+  assertTrustedSender(event);
+  const job = activeExports.get(event.sender.id);
+  const session = job?.realtimeSession;
+  if (!session || payload?.sessionId !== session.id) throw new Error('Realtime export session not found.');
+  if (job.controller.signal.aborted) throw new ExportCanceledError();
+  if (Number(payload.chunkIndex) !== session.nextChunk) {
+    throw new Error('Invalid capture chunk order: expected ' + session.nextChunk + ', received ' + payload.chunkIndex + '.');
+  }
+  if (!(payload.buffer instanceof ArrayBuffer) || payload.buffer.byteLength < 1 || payload.buffer.byteLength > 32 * 1024 * 1024) {
+    throw new Error('Invalid realtime capture chunk or chunk exceeds the 32 MiB safety limit.');
+  }
+  if (session.bytesWritten + payload.buffer.byteLength > 32 * 1024 * 1024 * 1024) {
+    throw new Error('Realtime capture exceeds the 32 GiB safety limit.');
+  }
+  const bytes = Buffer.from(payload.buffer);
+  if (session.nextChunk === 0 && !bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) {
+    throw new Error('The first MediaRecorder chunk does not contain a valid WebM/EBML header.');
+  }
+  await fs.appendFile(session.capturePath, bytes);
+  session.bytesWritten += bytes.length;
+  session.nextChunk += 1;
+  return { written: session.nextChunk, bytesWritten: session.bytesWritten };
+});
+
+ipcMain.handle('frame:finish-realtime-export', async (event, sessionId) => {
+  assertTrustedSender(event);
+  const job = activeExports.get(event.sender.id);
+  const session = job?.realtimeSession;
+  if (!session || session.id !== sessionId) throw new Error('Realtime export session not found.');
+  try {
+    if (job.controller.signal.aborted) throw new ExportCanceledError();
+    if (!session.nextChunk || session.bytesWritten < 1024) throw new Error('MediaRecorder returned an empty capture. Check playback and try again.');
+    const common = {
+      inputPath: session.capturePath, outputPath: session.temporaryOutputPath,
+      expectedDuration: session.duration, fps: session.fps, crf: session.crf,
+      rateMode: session.rateMode, videoBitrate: session.videoBitrate,
+      encoderPreset: session.encoderPreset, audioBitrate: session.audioBitrate,
+      signal: job.controller.signal,
+      onProcess: (_kind, child) => {
+        if (job.controller.signal.aborted && child.exitCode === null) child.kill('SIGTERM');
+      },
+      onProgress: progress => sendExportProgress(event.sender, progress)
+    };
+    const metadata = session.format === 'webm'
+      ? await copyValidatedWebm(common)
+      : await transcodeWebmToFormat({ ...common, format: session.format });
+    if (job.controller.signal.aborted) throw new ExportCanceledError();
+    await fs.rename(session.temporaryOutputPath, session.outputPath);
+    const result = {
+      canceled: false, filePath: session.outputPath, size: metadata.size,
+      duration: metadata.duration, format: metadata.format || session.format,
+      videoCodec: metadata.videoCodec, audioCodec: metadata.audioCodec,
+      width: metadata.width, height: metadata.height, fps: metadata.fps,
+      captureBytes: session.bytesWritten, captureChunks: session.nextChunk
+    };
+    sendExportProgress(event.sender, { stage: 'complete', progress: 100, seconds: metadata.duration, duration: metadata.duration });
+    return result;
+  } catch (error) {
+    if (error?.code === 'EXPORT_CANCELED' || job.controller.signal.aborted) return { canceled: true };
+    sendExportProgress(event.sender, { stage: 'failed', progress: 0, error: error?.message || String(error) });
+    throw error;
+  } finally {
+    await fs.rm(session.tempDir, { recursive: true, force: true }).catch(() => {});
+    if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
+  }
+});
+
+ipcMain.handle('frame:cancel-realtime-export', async (event, sessionId) => {
+  try { assertTrustedSender(event); } catch { return { canceled: true }; }
+  const job = activeExports.get(event.sender.id);
+  if (!job?.realtimeSession || job.realtimeSession.id !== sessionId) return { canceled: true };
+  job.controller.abort();
+  await fs.rm(job.realtimeSession.tempDir, { recursive: true, force: true }).catch(() => {});
+  if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
+  return { canceled: true };
 });
 
 // Deterministic frame-sequence export: the renderer seeks/draws each project-time

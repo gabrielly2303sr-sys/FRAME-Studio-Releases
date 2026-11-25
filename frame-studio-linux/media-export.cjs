@@ -220,51 +220,79 @@ async function checkMediaTools(options = {}) {
 
 /* Output -r performs CFR frame duplication/drop while remaining compatible with FFmpeg 4.4
  * (the minimum version used by the Ubuntu 22.04 CI runner). Newer-only -fps_mode is unnecessary. */
-async function transcodeWebmToMp4(options) {
+async function copyValidatedWebm(options = {}) {
+  const { inputPath, outputPath, expectedDuration = 0, signal, ffprobePath = resolveToolPath('ffprobe'), onProcess } = options;
+  if (!inputPath || !outputPath) throw new Error('Input and output paths are required.');
+  if (signal?.aborted) throw new ExportCanceledError();
+  try {
+    const inputStat = await fs.stat(inputPath).catch(() => null);
+    if (!inputStat?.isFile() || inputStat.size < 1024) throw new Error('The WebM capture is empty or missing.');
+    const inputProbe = await probeMedia(inputPath, { ffprobePath, signal, onProcess });
+    const inputVideo = validateProbe(inputProbe, expectedDuration, 'Temporary WebM capture');
+    if (!['vp8', 'vp9', 'av1'].includes(inputVideo.codec_name)) {
+      throw new Error(`WebM export contains an unsupported video codec: ${inputVideo.codec_name || 'unknown'}.`);
+    }
+    const inputAudio = inputProbe.streams.find(stream => stream.codec_type === 'audio');
+    if (inputAudio && !['opus', 'vorbis'].includes(inputAudio.codec_name)) {
+      throw new Error(`WebM export contains an unsupported audio codec: ${inputAudio.codec_name || 'unknown'}.`);
+    }
+    if (signal?.aborted) throw new ExportCanceledError();
+    await fs.copyFile(inputPath, outputPath);
+    const outputStat = await fs.stat(outputPath);
+    const outputProbe = await probeMedia(outputPath, { ffprobePath, signal, onProcess });
+    const outputVideo = validateProbe(outputProbe, expectedDuration, 'O WebM exportado');
+    const outputAudio = outputProbe.streams.find(stream => stream.codec_type === 'audio');
+    if (inputAudio && !outputAudio) throw new Error('The exported WebM is missing its audio stream.');
+    if (signal?.aborted) throw new ExportCanceledError();
+    return {
+      format: 'webm', duration: outputProbe.duration, size: outputStat.size,
+      videoCodec: outputVideo.codec_name, audioCodec: outputAudio?.codec_name || null,
+      width: outputVideo.width, height: outputVideo.height,
+      fps: parseFrameRate(outputVideo.avg_frame_rate) ?? parseFrameRate(outputVideo.r_frame_rate)
+    };
+  } catch (error) {
+    await fs.rm(outputPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function transcodeWebmToFormat(options = {}) {
   const {
-    inputPath,
-    outputPath,
-    expectedDuration = 0,
-    fps = 30,
-    crf = 18,
-    signal,
-    onProgress,
-    onProcess,
-    ffmpegPath = resolveToolPath('ffmpeg'),
-    ffprobePath = resolveToolPath('ffprobe'),
-    spawnImpl
+    inputPath, outputPath, expectedDuration = 0, fps = 30, crf = 18,
+    rateMode = 'crf', videoBitrate = 12, encoderPreset = 'veryfast',
+    audioBitrate = 192, format = 'mp4', signal, onProgress, onProcess,
+    ffmpegPath = resolveToolPath('ffmpeg'), ffprobePath = resolveToolPath('ffprobe'), spawnImpl
   } = options || {};
   if (!inputPath || !outputPath) throw new Error('Input and output paths are required.');
+  const safeFormat = ['mp4', 'mov', 'mkv'].includes(String(format).toLowerCase()) ? String(format).toLowerCase() : 'mp4';
+  const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));
+  const safeCrf = Math.max(16, Math.min(28, Math.round(Number(crf) || 18)));
+  const safeRateMode = rateMode === 'bitrate' ? 'bitrate' : 'crf';
+  const safeVideoBitrate = Math.max(2, Math.min(100, Number(videoBitrate) || 12));
+  const safeEncoderPreset = ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(encoderPreset) ? encoderPreset : 'veryfast';
+  const safeAudioBitrate = [96, 128, 160, 192, 256, 320].includes(Number(audioBitrate)) ? Number(audioBitrate) : 192;
   if (signal?.aborted) throw new ExportCanceledError();
 
   try {
     const inputStat = await fs.stat(inputPath).catch(() => null);
-    if (!inputStat?.isFile() || inputStat.size === 0) throw new Error('The temporary WebM capture is empty or missing.');
+    if (!inputStat?.isFile() || inputStat.size < 1024) throw new Error('The temporary WebM capture is empty or missing.');
     const inputProbe = await probeMedia(inputPath, { ffprobePath, signal, onProcess });
-    validateProbe(inputProbe, expectedDuration, 'Temporary capture', { allowUnknownDuration: true });
-    const inputVideo = inputProbe.streams.find(stream => stream.codec_type === 'video');
+    const inputVideo = validateProbe(inputProbe, expectedDuration, 'Temporary WebM capture');
     const hasAudio = inputProbe.streams.some(stream => stream.codec_type === 'audio');
-    const safeFps = Math.max(1, Math.min(120, Math.round(Number(fps) || 30)));
-    const safeCrf = Math.max(16, Math.min(28, Math.round(Number(crf) || 18)));
-    const args = [
-      '-hide_banner', '-y', '-i', inputPath,
-      '-map', '0:v:0'
-    ];
+    const args = ['-hide_banner', '-y', '-i', inputPath, '-map', '0:v:0'];
     if (hasAudio) args.push('-map', '0:a:0');
-    args.push(
-      '-map_metadata', '-1',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(safeCrf),
-      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-      '-r', String(safeFps), '-pix_fmt', 'yuv420p'
-    );
-    if (hasAudio) args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
-    args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
+    args.push('-map_metadata', '-1', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-r', String(safeFps), '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', safeEncoderPreset);
+    if (safeRateMode === 'bitrate') {
+      args.push('-b:v', `${safeVideoBitrate}M`, '-maxrate', `${Math.round(safeVideoBitrate * 1.35)}M`, '-bufsize', `${Math.round(safeVideoBitrate * 2)}M`);
+    } else {
+      args.push('-crf', String(safeCrf));
+    }
+    if (hasAudio) args.push('-c:a', 'aac', '-b:a', `${safeAudioBitrate}k`, '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1:first_pts=0');
+    if (safeFormat === 'mp4' || safeFormat === 'mov') args.push('-movflags', '+faststart');
+    args.push('-progress', 'pipe:1', '-nostats', outputPath);
 
     await runProcess(ffmpegPath, args, {
-      signal,
-      kind: 'ffmpeg',
-      onProcess,
-      spawnImpl,
+      signal, kind: 'ffmpeg', onProcess, spawnImpl,
       onProgress: (seconds, ended) => {
         if (ended) return onProgress?.({ stage: 'transcoding', progress: 99, seconds: expectedDuration, duration: expectedDuration });
         const denominator = expectedDuration > 0 ? expectedDuration : inputProbe.duration;
@@ -275,31 +303,36 @@ async function transcodeWebmToMp4(options) {
     if (signal?.aborted) throw new ExportCanceledError();
     onProgress?.({ stage: 'validating', progress: 99, seconds: 0, duration: expectedDuration });
     const outputStat = await fs.stat(outputPath).catch(() => null);
-    if (!outputStat?.isFile() || outputStat.size < 1024) throw new Error('FFmpeg did not generate a valid MP4 (the file is empty or too small).');
+    if (!outputStat?.isFile() || outputStat.size < 1024) throw new Error(`FFmpeg did not generate a valid ${safeFormat.toUpperCase()} file (the file is empty or too small).`);
     const outputProbe = await probeMedia(outputPath, { ffprobePath, signal, onProcess });
-    const outputVideo = validateProbe(outputProbe, expectedDuration, 'O MP4 exportado');
+    const outputVideo = validateProbe(outputProbe, expectedDuration, `O ${safeFormat.toUpperCase()} exportado`);
     if (outputVideo.codec_name !== 'h264') throw new Error(`Unexpected video codec: ${outputVideo.codec_name || 'unknown'}; expected H.264.`);
-    if (!outputVideo.width || !outputVideo.height || outputVideo.width % 2 || outputVideo.height % 2) throw new Error('The exported MP4 has dimensions that are invalid for H.264/yuv420p.');
+    if (!outputVideo.width || !outputVideo.height || outputVideo.width % 2 || outputVideo.height % 2) throw new Error(`The exported ${safeFormat.toUpperCase()} has dimensions invalid for H.264/yuv420p.`);
     const outputAudio = outputProbe.streams.find(stream => stream.codec_type === 'audio');
     if (hasAudio && outputAudio?.codec_name !== 'aac') throw new Error(`Unexpected audio codec: ${outputAudio?.codec_name || 'missing'}; expected AAC.`);
-    if (!hasAudio && outputAudio) throw new Error('The MP4 contains an unexpected audio stream even though the capture has no audio.');
+    if (!hasAudio && outputAudio) throw new Error(`The ${safeFormat.toUpperCase()} contains an unexpected audio stream although the capture has no audio.`);
+    const actualFps = parseFrameRate(outputVideo.avg_frame_rate) ?? parseFrameRate(outputVideo.r_frame_rate);
+    if (!Number.isFinite(actualFps) || Math.abs(actualFps - safeFps) > 0.1) {
+      throw new Error(`Unexpected output FPS: ${Number.isFinite(actualFps) ? actualFps.toFixed(3) : 'unknown'}; expected ${safeFps} FPS.`);
+    }
     if (signal?.aborted) throw new ExportCanceledError();
     onProgress?.({ stage: 'validating', progress: 100, seconds: outputProbe.duration, duration: outputProbe.duration });
     return {
-      duration: outputProbe.duration,
-      size: outputStat.size,
-      videoCodec: outputVideo.codec_name,
-      audioCodec: outputAudio?.codec_name || null,
-      width: outputVideo.width,
-      height: outputVideo.height,
-      fps: safeFps,
-      inputHasAudio: hasAudio,
-      inputVideoCodec: inputVideo.codec_name || null
+      format: safeFormat, duration: outputProbe.duration, size: outputStat.size,
+      videoCodec: outputVideo.codec_name, audioCodec: outputAudio?.codec_name || null,
+      width: outputVideo.width, height: outputVideo.height, fps: actualFps,
+      crf: safeCrf, rateMode: safeRateMode, videoBitrate: safeVideoBitrate,
+      encoderPreset: safeEncoderPreset, audioBitrate: safeAudioBitrate,
+      inputVideoCodec: inputVideo.codec_name || null, inputHasAudio: hasAudio
     };
   } catch (error) {
     await fs.rm(outputPath, { force: true }).catch(() => {});
     throw error;
   }
+}
+
+async function transcodeWebmToMp4(options = {}) {
+  return transcodeWebmToFormat({ ...options, format: 'mp4' });
 }
 
 
@@ -617,5 +650,5 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
 }
 
-module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
+module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, transcodeWebmToFormat, copyValidatedWebm, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
 

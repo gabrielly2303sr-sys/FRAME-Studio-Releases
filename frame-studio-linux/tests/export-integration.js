@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { checkMediaTools, transcodeWebmToMp4, renderFrameSequenceToMp4, probeMedia, volumeAutomationExpression, buildRemapAudioSegments } = require('../media-export.cjs');
+const { checkMediaTools, transcodeWebmToMp4, transcodeWebmToFormat, copyValidatedWebm, renderFrameSequenceToMp4, probeMedia, volumeAutomationExpression, buildRemapAudioSegments } = require('../media-export.cjs');
 
 function run(binary, args) {
   return new Promise((resolve, reject) => {
@@ -35,6 +35,9 @@ async function main() {
     const withAudio = path.join(dir, 'capture-with-audio.webm');
     const withoutAudio = path.join(dir, 'capture-silent.webm');
     const withAudioMp4 = path.join(dir, 'validated-with-audio.mp4');
+    const copiedWebm = path.join(dir, 'validated-copy.webm');
+    const convertedMov = path.join(dir, 'validated-output.mov');
+    const convertedMkv = path.join(dir, 'validated-output.mkv');
     const silentMp4 = path.join(dir, 'validated-silent.mp4');
     const framePattern = path.join(dir, 'frame-%08d.png');
     const sequenceWithAudioMp4 = path.join(dir, 'sequence-with-audio.mp4');
@@ -75,6 +78,39 @@ async function main() {
     assert.ok(Math.abs(audioProbe.duration - 1.2) < 0.4, `duração plausível com áudio: ${audioProbe.duration}`);
     assert.ok(audioProbe.streams.some(s => s.codec_type === 'audio' && s.codec_name === 'aac'));
     assert.ok(progress.includes('transcoding') && progress.includes('validating'));
+
+
+    // Realtime capture route: validate a native WebM directly, then convert the same
+    // source capture to MOV and MKV without passing through the numbered PNG path.
+    const webmCopyResult = await copyValidatedWebm({
+      inputPath: withAudio, outputPath: copiedWebm, expectedDuration: 1.2
+    });
+    const copiedWebmProbe = await probeMedia(copiedWebm);
+    assert.equal(webmCopyResult.format, 'webm');
+    assert.equal(webmCopyResult.videoCodec, 'vp9');
+    assert.equal(webmCopyResult.audioCodec, 'opus');
+    assert.ok(Math.abs(copiedWebmProbe.duration - 1.2) < 0.4);
+    assert.ok(copiedWebmProbe.streams.some(stream => stream.codec_type === 'audio' && stream.codec_name === 'opus'));
+
+    const movResult = await transcodeWebmToFormat({
+      inputPath: withAudio, outputPath: convertedMov, expectedDuration: 1.2,
+      fps: 24, format: 'mov', encoderPreset: 'veryfast'
+    });
+    const movProbe = await probeMedia(convertedMov);
+    assert.equal(movResult.format, 'mov');
+    assert.equal(movResult.videoCodec, 'h264');
+    assert.equal(movResult.audioCodec, 'aac');
+    assert.ok(movProbe.streams.some(stream => stream.codec_type === 'audio' && stream.codec_name === 'aac'));
+
+    const mkvResult = await transcodeWebmToFormat({
+      inputPath: withAudio, outputPath: convertedMkv, expectedDuration: 1.2,
+      fps: 24, format: 'mkv', encoderPreset: 'veryfast'
+    });
+    const mkvProbe = await probeMedia(convertedMkv);
+    assert.equal(mkvResult.format, 'mkv');
+    assert.equal(mkvResult.videoCodec, 'h264');
+    assert.equal(mkvResult.audioCodec, 'aac');
+    assert.ok(mkvProbe.streams.some(stream => stream.codec_type === 'audio' && stream.codec_name === 'aac'));
 
     const silentResult = await transcodeWebmToMp4({ inputPath: withoutAudio, outputPath: silentMp4, expectedDuration: 1.2, fps: 30 });
     const silentProbe = await probeMedia(silentMp4);
@@ -156,7 +192,7 @@ async function main() {
 
     const corrupted = path.join(dir, 'not-a-video.webm');
     await fs.writeFile(corrupted, 'não é um vídeo');
-    await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /ffprobe failed|metadata|duration/i);
+    await assert.rejects(transcodeWebmToMp4({ inputPath: corrupted, outputPath: path.join(dir, 'corrupted.mp4'), expectedDuration: 1 }), /empty or missing|ffprobe failed|metadata|duration/i);
 
     // Use the current Node executable as a portable long-running child. A POSIX
     // shebang fixture cannot be spawned on Windows runners, so inject only the
@@ -190,8 +226,8 @@ async function main() {
     );
     assert.equal(await fs.access(canceledSequencePath).then(() => true, () => false), false, 'cancelamento da sequência deve remover o MP4 parcial');
 
-    console.log('FRAME Studio 2.4.17 export integration tests: OK');
-    console.log('Generated and validated with ffprobe: deterministic 10 FPS H.264 + AAC sequence (CRF 23), silent H.264 sequence (CRF 28), target-bitrate sequence, reverse/freeze Time Remap audio, and compatibility transcodes.');
+    console.log('FRAME Studio export integration tests: OK');
+    console.log('Generated and validated with ffprobe: realtime WebM copy (VP9 + Opus), MOV/MKV H.264 + AAC conversions, MP4 audio/silent transcodes, and deterministic frame-sequence rendering.');
     console.log('Verified: final FPS and duration, audio presence/absence, codecs, progress, missing FFmpeg, corrupt input, and cancellation on both export paths.');
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
