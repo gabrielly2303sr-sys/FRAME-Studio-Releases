@@ -1738,7 +1738,7 @@ function exportProgressListener(data){
   $('#export').textContent=`Frames ${pct}%`;setStatus(`Deterministic render · ${pct}% (${Number(data.seconds||0).toFixed(2)} / ${Number(data.duration||0).toFixed(2)} s)`);
  }else if(data?.stage==='transcoding'){
   const pct=Math.max(0,Math.min(99,Math.round(data.progress||0)));
-  $('#export').textContent=`MP4 ${pct}%`;setStatus(`Codificando H.264/AAC · ${pct}%`);
+  $('#export').textContent=exportFormat.toUpperCase()+` ${pct}%`;setStatus(`Codificando ${exportFormat.toUpperCase()} · ${pct}%`);
  }else if(data?.stage==='validating'){
   $('#export').textContent='Validando…';setStatus('Validando codecs e duração com ffprobe…');
  }
@@ -1855,7 +1855,7 @@ async function exportProject() {
   const tools=await window.frameAPI.checkExportTools();
   if(!tools?.available)throw new Error(tools?.message||'FFmpeg/ffprobe não estão disponíveis neste pacote.');
   if(previewMode!=='timeline'){$('#previewmode').value='timeline';previewMode='timeline'}
-  canvas=previewCanvas;ctx=canvas.getContext('2d');
+  canvas=previewCanvas;ctx=canvas.getContext('2d');configureCanvas();
   await ensureFontsReady();
   await ensureAudio();
   const timelineAudioClips=clips.filter(clip=>{
