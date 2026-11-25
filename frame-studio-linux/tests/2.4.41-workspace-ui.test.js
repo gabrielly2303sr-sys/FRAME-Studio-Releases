@@ -31,8 +31,8 @@ for(const folder of ['Blur & Distortion','Light & Glow','Color & Correction','Te
 assert.match(renderer,/function renderEffectLibrary\(\)/);
 const getFunction=(name)=>{const start=renderer.indexOf(`function ${name}(`);assert.ok(start>=0,`${name} exists`);const brace=renderer.indexOf('{',start);let depth=0,quote=null,escape=false;for(let i=brace;i<renderer.length;i++){const c=renderer[i];if(quote){if(escape)escape=false;else if(c==='\\')escape=true;else if(c===quote)quote=null}else{if(c==='"'||c==="'"||c==='`')quote=c;else if(c==='{')depth++;else if(c==='}'&&--depth===0)return renderer.slice(start,i+1)}}throw new Error(`function end missing: ${name}`)};
 const contextTabs=getFunction('updateContextTabs');
-assert.ok(contextTabs.includes("$('.itab').forEach("),'inspector tab visibility iterates all tabs via querySelectorAll');
-assert.ok(contextTabs.includes("$('.panel').forEach("),'inspector panel states iterate all panels via querySelectorAll');
+assert.ok(contextTabs.includes("$$('.itab').forEach("),'inspector tab visibility iterates all tabs via querySelectorAll');
+assert.ok(contextTabs.includes("$$('.panel').forEach("),'inspector panel states iterate all panels via querySelectorAll');
 assert.match(contextTabs,/kind==='video'\)show=\['transform','color','mask','effects','anim','time','3d','shadow','audio'\]\.includes\(t\)/,'video clips expose the Audio inspector tab');
 assert.match(contextTabs,/kind==='video'\?\['transform','color','mask','effects','anim','time','3d','shadow','audio'\]/,'video clips enable the Audio inspector panel');
 const ctx=vm.createContext({String,Array});
