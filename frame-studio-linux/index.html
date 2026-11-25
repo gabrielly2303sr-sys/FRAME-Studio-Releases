@@ -1747,7 +1747,7 @@ async function exportProjectFrameAccurate(){
  if(!clips.length)return message('Adicione pelo menos um clipe antes de exportar');
  if(!window.frameAPI?.isDesktop||!window.frameAPI?.beginFrameExport||!window.frameAPI?.writeExportFrame||!window.frameAPI?.finishFrameExport)return message('A renderização determinística requer o FRAME Studio desktop atualizado.');
  if(recording||exportStarting)return;
- exportStarting=true;exportCancelled=false;playing=false;playStarting=false;playbackEpoch++;sourcePlaying=false;sourcePlaybackEpoch++;lastFrame=0;$('#play').textContent='▶';assets.forEach(asset=>{if(asset.el&&['video','audio'].includes(asset.kind)){try{asset.el.pause()}catch{}}if(asset.audioEl){try{asset.audioEl.pause()}catch{}}});$('#export').disabled=true;setStatus('Verificando FFmpeg e ffprobe…');
+ exportStarting=true;recording=true;exportCancelled=false;playing=false;playStarting=false;playbackEpoch++;sourcePlaying=false;sourcePlaybackEpoch++;lastFrame=0;$('#play').textContent='▶';assets.forEach(asset=>{if(asset.el&&['video','audio'].includes(asset.kind)){try{asset.el.pause()}catch{}}if(asset.audioEl){try{asset.audioEl.pause()}catch{}}});$('#export').disabled=true;setStatus('Verificando FFmpeg e ffprobe…');
  let sessionId=null,unsubscribe=null,originalPlayhead=playhead,frameCount=0,framesCompleted=0;const exportProfile={startedAt:performance.now(),sourceSeekMs:0,compositeMs:0,pngEncodeMs:0,ipcWriteMs:0,encodeValidateMs:0};let profileStatus='starting';const publishExportProfile=(status=profileStatus,extra={})=>{profileStatus=status;const elapsedSeconds=(performance.now()-exportProfile.startedAt)/1000,projectSeconds=Number(extra.projectSeconds||0),profileSummary={frames:frameCount,framesCompleted,projectSeconds,elapsedSeconds:Number(elapsedSeconds.toFixed(2)),realTimeFactor:elapsedSeconds>0?Number((projectSeconds/elapsedSeconds).toFixed(2)):0,sourceSeekSeconds:Number((exportProfile.sourceSeekMs/1000).toFixed(2)),compositeSeconds:Number((exportProfile.compositeMs/1000).toFixed(2)),pngEncodeSeconds:Number((exportProfile.pngEncodeMs/1000).toFixed(2)),ipcWriteSeconds:Number((exportProfile.ipcWriteMs/1000).toFixed(2)),encodeValidateSeconds:Number((exportProfile.encodeValidateMs/1000).toFixed(2)),encoderPreset:extra.encoderPreset||exportEncoderPreset,status:profileStatus,...(extra.error?{error:String(extra.error)}:{})};window.lastExportProfile=profileSummary;return profileSummary};publishExportProfile('starting');
  try{
   if(!window.frameAPI?.checkExportTools)throw new Error('Não foi possível verificar o FFmpeg/ffprobe. Reinstale o FRAME Studio atualizado.');
@@ -1828,6 +1828,8 @@ async function exportProject() {
   if(exportFormat!=='mp4')return message('O modo frame a frame atualmente exporta MP4. Escolha MP4 ou use o modo em tempo real para MOV, MKV e WebM.');
   return exportProjectFrameAccurate();
  }
+ const usesTimeRemap=clips.some(clip=>['video','audio'].includes(clip.kind)&&!trackSettings[clip.track]?.hidden&&Array.isArray(clip.timeRemap)&&clip.timeRemap.length>0);
+ if(usesTimeRemap){if(exportFormat==='mp4')return exportProjectFrameAccurate();return message('Este projeto usa Time Remap. Para preservar reverse/freeze e o áudio remapeado, escolha MP4 + Frame a frame nas opções de exportação.')}
  if(!clips.length)return message('Adicione pelo menos um clipe antes de exportar');
  if(!window.frameAPI?.isDesktop||!window.frameAPI?.beginRealtimeExport||!window.frameAPI?.writeRealtimeExportChunk||!window.frameAPI?.finishRealtimeExport)return message('A captura em tempo real requer uma versão desktop atualizada do FRAME Studio.');
  if(recording||exportStarting)return;
@@ -1904,21 +1906,23 @@ async function exportProject() {
    }).catch(error=>{chunkError=chunkError||error});
   });
   unsubscribe=window.frameAPI.onExportProgress?.(exportProgressListener);
-  setPlayhead(0);drawPreview();
+  setPlayhead(0);await prepareVideoFramesAt(0);drawPreview();
   recorder.start(1000);recorderStarted=true;startedAt=performance.now();
   playing=true;playStarting=false;playbackEpoch++;lastFrame=0;lastPreviewRender=0;$('#play').textContent='Ⅱ';
   syncMedia(true);
   $('#export').textContent='Capturando…';setStatus('Capturando o playback em tempo real · '+fps+' FPS');
   await new Promise((resolve,reject)=>{
-   const check=()=>{
+   let lastUiUpdate=0;
+   const check=now=>{
     if(exportCancelled)return reject(Object.assign(new Error('Exportação cancelada.'),{code:'EXPORT_CANCELED'}));
     if(chunkError)return reject(chunkError);
     if(recorderError)return reject(recorderError);
     if(!playing||playhead>=totalDuration-.002)return resolve();
     if(performance.now()-startedAt>(totalDuration+15)*1000)return reject(new Error('A captura excedeu o tempo limite de segurança.'));
+    if(now-lastUiUpdate>250){lastUiUpdate=now;const pct=Math.min(99,Math.round(playhead/Math.max(.001,totalDuration)*100));$('#export').textContent='Capturando '+pct+'%';setStatus('Captura em tempo real · '+pct+'% ('+playhead.toFixed(1)+' / '+totalDuration.toFixed(1)+' s)')}
     requestAnimationFrame(check);
    };
-   check();
+   requestAnimationFrame(check);
   });
   playing=false;playStarting=false;playbackEpoch++;syncMedia(true);
   await stopRecorder();recorderStarted=false;await writeQueue;
