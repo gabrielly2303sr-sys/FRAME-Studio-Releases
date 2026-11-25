@@ -11,8 +11,8 @@ const preload = fs.readFileSync(path.join(root, 'preload.cjs'), 'utf8');
 const media = fs.readFileSync(path.join(root, 'media-export.cjs'), 'utf8');
 const renderer = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1] || '';
 
-assert.equal(pkg.version, '2.4.44');
-assert.match(html, /<title>FRAME Studio 2\.4\.44<\/title>/);
+assert.equal(pkg.version, '2.4.45');
+assert.match(html, /<title>FRAME Studio 2\.4\.45<\/title>/);
 assert.match(html, /id="previewfullscreen"/);
 assert.match(html, /id="exportformat"/);
 assert.match(html, /id="exportmode"/);
@@ -36,4 +36,4 @@ assert.match(media, /async function transcodeWebmToFormat\(/);
 assert.match(media, /module\.exports = \{[^}]*transcodeWebmToFormat[^}]*copyValidatedWebm/);
 assert.match(media, /'libx264'/);
 assert.match(media, /'aac'/);
-console.log('FRAME Studio 2.4.44 realtime export/fullscreen regression checks: OK');
+console.log('FRAME Studio 2.4.45 realtime export/fullscreen regression checks: OK');
