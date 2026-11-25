@@ -650,5 +650,5 @@ async function renderFrameSequenceToMp4(options = {}) {
   }
 }
 
-module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
+module.exports = { ExportCanceledError, checkMediaTools, parseFrameRate, probeMedia, transcodeWebmToMp4, transcodeWebmToFormat, copyValidatedWebm, renderFrameSequenceToMp4, volumeAutomationExpression, remapAudioPoints, buildRemapAudioSegments };
 
