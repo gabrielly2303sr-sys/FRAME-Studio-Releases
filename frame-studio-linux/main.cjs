@@ -14,7 +14,8 @@ const execFileAsync = promisify(execFile);
 const mediaTools = require('./media-tools.cjs');
 const { createMediaFileResponse } = require('./media-range.cjs');
 const { pathToFileURL } = require('node:url');
-const { checkMediaTools, probeMedia, transcodeWebmToMp4, transcodeWebmToFormat, copyValidatedWebm, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
+const { checkMediaTools, probeMedia, transcodeWebmToMp4, renderFrameSequenceToMp4, ExportCanceledError } = require('./media-export.cjs');
+const { createStreamingEncoder, makeIntraProxy, trimProxyCache } = require('./stream-export.cjs');
 const activeExports = new Map();
 const activeYoutubeDownloads = new Map();
 const trustedRendererURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
@@ -674,163 +675,55 @@ ipcMain.on('frame:cancel-export', event => {
   activeExports.get(event.sender.id)?.controller.abort();
 });
 
-// Realtime export: capture the already-composited preview and mixed project audio.
-// This avoids one seek + PNG encode + PNG IPC + disk write for every output frame.
-ipcMain.handle('frame:begin-realtime-export', async (event, payload) => {
-  assertTrustedSender(event);
-  if (activeExports.has(event.sender.id)) throw new Error('An export is already running in this window.');
-  const format = ['mp4', 'webm', 'mov', 'mkv'].includes(String(payload?.format || '').toLowerCase())
-    ? String(payload.format).toLowerCase() : 'mp4';
-  const duration = Number(payload?.duration);
-  const fps = Math.max(1, Math.min(120, Math.round(Number(payload?.fps) || 30)));
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 43200) {
-    throw new Error('Invalid export duration. The project must be between 0 and 12 hours.');
-  }
-  const safeBase = String(payload.name || 'frame-studio-export')
-    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
-    .replace(/\.(?:webm|mp4|mov|mkv)$/i, '').slice(0, 150) || 'frame-studio-export';
-  const extension = format;
-  const win = BrowserWindow.fromWebContents(event.sender);
-  const filters = {
-    mp4: [{ name: 'MP4 Video · H.264 + AAC', extensions: ['mp4'] }],
-    webm: [{ name: 'WebM Video · VP8/VP9 + Opus', extensions: ['webm'] }],
-    mov: [{ name: 'QuickTime MOV · H.264 + AAC', extensions: ['mov'] }],
-    mkv: [{ name: 'Matroska MKV · H.264 + AAC', extensions: ['mkv'] }]
-  };
-  const result = await dialog.showSaveDialog(win, {
-    title: 'Export composition to ' + format.toUpperCase(),
-    defaultPath: path.join(app.getPath('videos'), safeBase + '.' + extension),
-    filters: filters[format]
-  });
-  if (result.canceled || !result.filePath) return { canceled: true };
-  const selectedExtension = path.extname(result.filePath);
-  const outputPath = selectedExtension.toLowerCase() === '.' + extension
-    ? result.filePath
-    : selectedExtension
-      ? path.join(path.dirname(result.filePath), path.basename(result.filePath, selectedExtension) + '.' + extension)
-      : result.filePath + '.' + extension;
-  const controller = new AbortController();
-  let tempDir;
-  try {
-    tempDir = await fs.mkdtemp(path.join(path.dirname(outputPath), '.frame-studio-realtime-'));
-    const session = {
-      id: randomUUID(), controller, tempDir, outputPath, format, fps, duration,
-      capturePath: path.join(tempDir, 'capture.webm'),
-      temporaryOutputPath: path.join(tempDir, 'rendered.' + extension),
-      nextChunk: 0, bytesWritten: 0,
-      crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
-      rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
-      videoBitrate: Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)),
-      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'veryfast',
-      audioBitrate: [96, 128, 160, 192, 256, 320].includes(Number(payload.audioBitrate)) ? Number(payload.audioBitrate) : 192
-    };
-    activeExports.set(event.sender.id, { controller, realtimeSession: session });
-    sendExportProgress(event.sender, { stage: 'capturing', progress: 0, seconds: 0, duration });
-    return { canceled: false, sessionId: session.id, format, fps, duration, outputPath };
-  } catch (error) {
-    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-    throw error;
-  }
-});
+// Streaming frame export (2.4.46): the renderer draws each project-time frame in order and
+// sends raw RGBA to FFmpeg through a pipe. Nothing is written to disk except the final
+// MP4 (as "<name>.mp4.part" until it is complete), so long projects cannot fill the disk.
+function sanitizeAudioClips(list) {
+  return Array.isArray(list) ? list.slice(0, 500).map(clip => ({
+    name: String(clip?.name || 'Clipe'),
+    kind: clip?.kind === 'audio' ? 'audio' : 'video',
+    path: typeof clip?.path === 'string' ? clip.path : null,
+    start: Number(clip?.start) || 0,
+    inPoint: Number(clip?.inPoint) || 0,
+    outPoint: Number(clip?.outPoint),
+    speed: Number(clip?.speed) || 1,
+    volume: Math.max(0, Math.min(200, Number(clip?.volume ?? 100))),
+    volumeKeyframes: Array.isArray(clip?.volumeKeyframes) ? clip.volumeKeyframes.slice(0, 500).map(key => ({ time: Number(key?.time) || 0, value: Math.max(0, Math.min(200, Number(key?.value) || 0)), ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
+    timeRemap: Array.isArray(clip?.timeRemap) ? clip.timeRemap.slice(0, 100).map(key => ({ time: Math.max(0, Math.min(1, Number(key?.time) || 0)), value: Math.max(0, Math.min(1, Number(key?.value) || 0)), mode: ['linear', 'smooth', 'hold'].includes(key?.mode) ? key.mode : 'linear', ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
+    timeRemapDuration: Math.max(0, Math.min(43200, Number(clip?.timeRemapDuration) || 0)),
+    fadeIn: Math.max(0, Math.min(30, Number(clip?.fadeIn) || 0)),
+    fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0))
+  })) : [];
+}
 
-ipcMain.handle('frame:write-realtime-export-chunk', async (event, payload) => {
-  assertTrustedSender(event);
-  const job = activeExports.get(event.sender.id);
-  const session = job?.realtimeSession;
-  if (!session || payload?.sessionId !== session.id) throw new Error('Realtime export session not found.');
-  if (job.controller.signal.aborted) throw new ExportCanceledError();
-  if (Number(payload.chunkIndex) !== session.nextChunk) {
-    throw new Error('Invalid capture chunk order: expected ' + session.nextChunk + ', received ' + payload.chunkIndex + '.');
-  }
-  if (!(payload.buffer instanceof ArrayBuffer) || payload.buffer.byteLength < 1 || payload.buffer.byteLength > 32 * 1024 * 1024) {
-    throw new Error('Invalid realtime capture chunk or chunk exceeds the 32 MiB safety limit.');
-  }
-  if (session.bytesWritten + payload.buffer.byteLength > 32 * 1024 * 1024 * 1024) {
-    throw new Error('Realtime capture exceeds the 32 GiB safety limit.');
-  }
-  const bytes = Buffer.from(payload.buffer);
-  if (session.nextChunk === 0 && !bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) {
-    throw new Error('The first MediaRecorder chunk does not contain a valid WebM/EBML header.');
-  }
-  await fs.appendFile(session.capturePath, bytes);
-  session.bytesWritten += bytes.length;
-  session.nextChunk += 1;
-  return { written: session.nextChunk, bytesWritten: session.bytesWritten };
-});
+async function abortFrameJob(job) {
+  if (!job) return;
+  try { job.controller.abort(); } catch {}
+  try { await job.frameSession?.encoder?.abort(); } catch {}
+}
 
-ipcMain.handle('frame:finish-realtime-export', async (event, sessionId) => {
-  assertTrustedSender(event);
-  const job = activeExports.get(event.sender.id);
-  const session = job?.realtimeSession;
-  if (!session || session.id !== sessionId) throw new Error('Realtime export session not found.');
-  try {
-    if (job.controller.signal.aborted) throw new ExportCanceledError();
-    if (!session.nextChunk || session.bytesWritten < 1024) throw new Error('MediaRecorder returned an empty capture. Check playback and try again.');
-    const common = {
-      inputPath: session.capturePath, outputPath: session.temporaryOutputPath,
-      expectedDuration: session.duration, fps: session.fps, crf: session.crf,
-      rateMode: session.rateMode, videoBitrate: session.videoBitrate,
-      encoderPreset: session.encoderPreset, audioBitrate: session.audioBitrate,
-      signal: job.controller.signal,
-      onProcess: (_kind, child) => {
-        if (job.controller.signal.aborted && child.exitCode === null) child.kill('SIGTERM');
-      },
-      onProgress: progress => sendExportProgress(event.sender, progress)
-    };
-    const metadata = session.format === 'webm'
-      ? await copyValidatedWebm(common)
-      : await transcodeWebmToFormat({ ...common, format: session.format });
-    if (job.controller.signal.aborted) throw new ExportCanceledError();
-    await fs.rename(session.temporaryOutputPath, session.outputPath);
-    const result = {
-      canceled: false, filePath: session.outputPath, size: metadata.size,
-      duration: metadata.duration, format: metadata.format || session.format,
-      videoCodec: metadata.videoCodec, audioCodec: metadata.audioCodec,
-      width: metadata.width, height: metadata.height, fps: metadata.fps,
-      captureBytes: session.bytesWritten, captureChunks: session.nextChunk
-    };
-    sendExportProgress(event.sender, { stage: 'complete', progress: 100, seconds: metadata.duration, duration: metadata.duration });
-    return result;
-  } catch (error) {
-    if (error?.code === 'EXPORT_CANCELED' || job.controller.signal.aborted) return { canceled: true };
-    sendExportProgress(event.sender, { stage: 'failed', progress: 0, error: error?.message || String(error) });
-    throw error;
-  } finally {
-    await fs.rm(session.tempDir, { recursive: true, force: true }).catch(() => {});
-    if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
-  }
-});
-
-ipcMain.handle('frame:cancel-realtime-export', async (event, sessionId) => {
-  try { assertTrustedSender(event); } catch { return { canceled: true }; }
-  const job = activeExports.get(event.sender.id);
-  if (!job?.realtimeSession || job.realtimeSession.id !== sessionId) return { canceled: true };
-  job.controller.abort();
-  await fs.rm(job.realtimeSession.tempDir, { recursive: true, force: true }).catch(() => {});
-  if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
-  return { canceled: true };
-});
-
-// Deterministic frame-sequence export: the renderer seeks/draws each project-time
-// frame in order; FFmpeg encodes the completed numbered sequence, never a live capture.
 ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
   assertTrustedSender(event);
-  if (activeExports.has(event.sender.id)) throw new Error('An export is already running in this window.');
+  const existing = activeExports.get(event.sender.id);
+  if (existing?.frameSession) { await abortFrameJob(existing); activeExports.delete(event.sender.id); }
+  else if (existing) throw new Error('An export is already running in this window.');
   if (!payload || !Number.isFinite(Number(payload.fps)) || !Number.isFinite(Number(payload.duration)) || !Number.isSafeInteger(Number(payload.frameCount))) {
     throw new Error('Invalid render configuration.');
   }
   const fps = Math.max(1, Math.min(120, Math.round(Number(payload.fps))));
   const duration = Number(payload.duration);
   const frameCount = Number(payload.frameCount);
-  if (duration <= 0 || duration > 43200 || frameCount < 1 || frameCount > fps * 43200 || Math.abs(frameCount / fps - duration) > 1 / fps + 0.002) {
+  const width = Math.floor(Number(payload.width)), height = Math.floor(Number(payload.height));
+  if (duration <= 0 || duration > 43200 || frameCount < 1 || frameCount > fps * 43200 || Math.abs(frameCount / fps - duration) > 2 / fps + 0.05) {
     throw new Error('Duration or frame count is outside the supported limits.');
   }
+  if (!(width >= 16 && height >= 16 && width <= 8192 && height <= 8192)) throw new Error('Invalid render resolution.');
   const safeBase = String(payload.name || 'frame-studio-export')
     .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
     .replace(/\.(?:webm|mp4)$/i, '').slice(0, 150) || 'frame-studio-export';
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showSaveDialog(win, {
-    title: 'Render deterministic composition to MP4',
+    title: 'Export MP4',
     defaultPath: path.join(app.getPath('videos'), `${safeBase}.mp4`),
     filters: [{ name: 'MP4 Video (H.264 + AAC)', extensions: ['mp4'] }]
   });
@@ -841,42 +734,37 @@ ipcMain.handle('frame:begin-frame-export', async (event, payload) => {
     : extension
       ? path.join(path.dirname(result.filePath), `${path.basename(result.filePath, extension)}.mp4`)
       : `${result.filePath}.mp4`;
-  const controller = new AbortController();
-  let tempDir;
+  // Fail now (before hours of rendering) if the destination is not writable.
   try {
-    tempDir = await fs.mkdtemp(path.join(path.dirname(outputPath), '.frame-studio-render-'));
-    const audioClips = Array.isArray(payload.audioClips) ? payload.audioClips.slice(0, 500).map(clip => ({
-      name: String(clip?.name || 'Clipe'),
-      kind: clip?.kind === 'audio' ? 'audio' : 'video',
-      path: typeof clip?.path === 'string' ? clip.path : null,
-      start: Number(clip?.start) || 0,
-      inPoint: Number(clip?.inPoint) || 0,
-      outPoint: Number(clip?.outPoint),
-      speed: Number(clip?.speed) || 1,
-      volume: Math.max(0, Math.min(200, Number(clip?.volume ?? 100))),
-      volumeKeyframes: Array.isArray(clip?.volumeKeyframes) ? clip.volumeKeyframes.slice(0, 500).map(key => ({ time: Number(key?.time) || 0, value: Math.max(0, Math.min(200, Number(key?.value) || 0)), ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
-      timeRemap: Array.isArray(clip?.timeRemap) ? clip.timeRemap.slice(0, 100).map(key => ({ time: Math.max(0, Math.min(1, Number(key?.time) || 0)), value: Math.max(0, Math.min(1, Number(key?.value) || 0)), mode: ['linear', 'smooth', 'hold'].includes(key?.mode) ? key.mode : 'linear', ease: key?.ease && typeof key.ease === 'object' ? { x1: Number(key.ease.x1), y1: Number(key.ease.y1), x2: Number(key.ease.x2), y2: Number(key.ease.y2) } : undefined })) : [],
-      timeRemapDuration: Math.max(0, Math.min(43200, Number(clip?.timeRemapDuration) || 0)),
-      fadeIn: Math.max(0, Math.min(30, Number(clip?.fadeIn) || 0)),
-      fadeOut: Math.max(0, Math.min(30, Number(clip?.fadeOut) || 0))
-    })) : [];
-    const session = {
-      id: randomUUID(), controller, tempDir, outputPath,
-      temporaryOutputPath: path.join(tempDir, 'rendered.mp4'),
-      framePattern: path.join(tempDir, 'frame-%08d.png'),
-      nextFrame: 0, expectedFrames: frameCount, fps, duration,
-      crf: Math.max(16, Math.min(28, Math.round(Number(payload.crf) || 18))),
-      rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
-      videoBitrate: Math.max(2, Math.min(100, Number(payload.videoBitrate) || 12)),
-      encoderPreset: ['veryfast', 'fast', 'medium', 'slow', 'slower'].includes(payload.encoderPreset) ? payload.encoderPreset : 'veryfast',
-      audioBitrate: [96, 128, 160, 192, 256, 320].includes(Number(payload.audioBitrate)) ? Number(payload.audioBitrate) : 192,
-      audioClips
-    };
-    activeExports.set(event.sender.id, { controller, frameSession: session });
-    sendExportProgress(event.sender, { stage: 'rendering', progress: 0, seconds: 0, duration });
-    return { canceled: false, sessionId: session.id, frameCount, fps, duration };
+    const probePath = `${outputPath}.write-test`;
+    await fs.writeFile(probePath, 'ok'); await fs.rm(probePath, { force: true });
   } catch (error) {
-    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    throw new Error(`Cannot write to "${path.dirname(outputPath)}": ${error.message}. Choose another folder.`);
+  }
+  const controller = new AbortController();
+  const job = { controller, frameSession: null };
+  activeExports.set(event.sender.id, job);
+  try {
+    sendExportProgress(event.sender, { stage: 'rendering', progress: 0, seconds: 0, duration });
+    const encoder = await createStreamingEncoder({
+      width, height, fps, frameCount, outputPath,
+      crf: Number(payload.crf) || 18,
+      rateMode: payload.rateMode === 'bitrate' ? 'bitrate' : 'crf',
+      videoBitrate: Number(payload.videoBitrate) || 12,
+      encoderPreset: payload.encoderPreset,
+      audioBitrate: Number(payload.audioBitrate) || 192,
+      audioClips: sanitizeAudioClips(payload.audioClips),
+      signal: controller.signal,
+      onProgress: progress => { if (progress.stage !== 'transcoding') sendExportProgress(event.sender, progress); }
+    });
+    job.frameSession = {
+      id: randomUUID(), encoder, outputPath, nextFrame: 0, expectedFrames: frameCount, fps, duration,
+      frameBytes: width * height * 4
+    };
+    return { canceled: false, sessionId: job.frameSession.id, frameCount, fps, duration, warnings: encoder.warnings.slice() };
+  } catch (error) {
+    activeExports.delete(event.sender.id);
+    if (error?.code === 'EXPORT_CANCELED') return { canceled: true };
     throw error;
   }
 });
@@ -888,21 +776,19 @@ ipcMain.handle('frame:write-export-frame', async (event, payload) => {
   if (!session || payload?.sessionId !== session.id) throw new Error('Render session not found.');
   if (job.controller.signal.aborted) throw new ExportCanceledError();
   if (Number(payload.frameIndex) !== session.nextFrame) throw new Error(`Invalid frame order: expected ${session.nextFrame}, received ${payload.frameIndex}.`);
-  if (!(payload.buffer instanceof ArrayBuffer) || payload.buffer.byteLength < 16 || payload.buffer.byteLength > 64 * 1024 * 1024) {
-    throw new Error('Invalid PNG frame or frame exceeds the 64 MiB limit.');
-  }
-  const bytes = Buffer.from(payload.buffer);
-  if (!bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) throw new Error('The submitted frame is not a valid PNG.');
-  const filename = path.join(session.tempDir, `frame-${String(session.nextFrame).padStart(8, '0')}.png`);
-  await fs.writeFile(filename, bytes, { flag: 'wx' });
+  const raw = payload.buffer;
+  let bytes = null;
+  if (raw instanceof ArrayBuffer) bytes = Buffer.from(raw);
+  else if (ArrayBuffer.isView(raw)) bytes = Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength);
+  if (!bytes || bytes.length !== session.frameBytes) throw new Error(`Invalid frame size (${bytes ? bytes.length : 'none'}; expected ${session.frameBytes} bytes of RGBA).`);
   session.nextFrame += 1;
-  if (session.nextFrame % Math.max(1, Math.round(session.fps / 2)) === 0 || session.nextFrame === session.expectedFrames) {
-    sendExportProgress(event.sender, {
-      stage: 'rendering', progress: session.nextFrame / session.expectedFrames * 100,
-      seconds: session.nextFrame / session.fps, duration: session.duration
-    });
+  const frameNumber = session.nextFrame;
+  const pending = session.encoder.writeFrame(bytes);
+  if (frameNumber % Math.max(1, Math.round(session.fps / 2)) === 0 || frameNumber === session.expectedFrames) {
+    sendExportProgress(event.sender, { stage: 'rendering', progress: frameNumber / session.expectedFrames * 100, seconds: frameNumber / session.fps, duration: session.duration });
   }
-  return { written: session.nextFrame };
+  await pending;
+  return { written: frameNumber };
 });
 
 ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
@@ -912,42 +798,21 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
   if (!session || payload?.sessionId !== session.id) throw new Error('Render session not found.');
   try {
     if (job.controller.signal.aborted) throw new ExportCanceledError();
-    if (session.nextFrame !== session.expectedFrames) {
-      throw new Error(`Incomplete sequence: received ${session.nextFrame} of ${session.expectedFrames} frames.`);
-    }
-    const metadata = await renderFrameSequenceToMp4({
-      framePattern: session.framePattern,
-      frameCount: session.expectedFrames,
-      outputPath: session.temporaryOutputPath,
-      expectedDuration: session.duration,
-      fps: session.fps,
-      crf: session.crf,
-      rateMode: session.rateMode,
-      videoBitrate: session.videoBitrate,
-      encoderPreset: session.encoderPreset,
-      audioBitrate: session.audioBitrate,
-      audioClips: session.audioClips,
-      signal: job.controller.signal,
-      onProcess: (_kind, child) => {
-        if (job.controller.signal.aborted && child.exitCode === null) child.kill('SIGTERM');
-      },
-      onProgress: progress => sendExportProgress(event.sender, progress)
-    });
-    if (job.controller.signal.aborted) throw new ExportCanceledError();
-    await fs.rename(session.temporaryOutputPath, session.outputPath);
+    if (session.nextFrame !== session.expectedFrames) throw new Error(`Incomplete sequence: received ${session.nextFrame} of ${session.expectedFrames} frames.`);
+    const metadata = await session.encoder.finish();
     sendExportProgress(event.sender, { stage: 'complete', progress: 100, seconds: metadata.duration, duration: metadata.duration });
     return {
       canceled: false, filePath: session.outputPath, size: metadata.size,
       duration: metadata.duration, videoCodec: metadata.videoCodec,
       audioCodec: metadata.audioCodec, fps: metadata.fps,
-      frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true
+      frameCount: metadata.frameCount, crf: metadata.crf, rateMode: metadata.rateMode, videoBitrate: metadata.videoBitrate, encoderPreset: metadata.encoderPreset, audioBitrate: metadata.audioBitrate, deterministicFrames: true,
+      warnings: metadata.warnings || []
     };
   } catch (error) {
     if (error?.code === 'EXPORT_CANCELED' || job.controller.signal.aborted) return { canceled: true };
     sendExportProgress(event.sender, { stage: 'failed', progress: 0, error: error?.message || String(error) });
     throw error;
   } finally {
-    await fs.rm(session.tempDir, { recursive: true, force: true }).catch(() => {});
     if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
   }
 });
@@ -955,11 +820,48 @@ ipcMain.handle('frame:finish-frame-export', async (event, payload) => {
 ipcMain.handle('frame:cancel-frame-export', async (event, sessionId) => {
   try { assertTrustedSender(event); } catch { return { canceled: true }; }
   const job = activeExports.get(event.sender.id);
-  if (!job?.frameSession || job.frameSession.id !== sessionId) return { canceled: true };
-  job.controller.abort();
-  await fs.rm(job.frameSession.tempDir, { recursive: true, force: true }).catch(() => {});
+  if (!job?.frameSession || (sessionId && job.frameSession.id !== sessionId)) return { canceled: true };
+  await abortFrameJob(job);
   if (activeExports.get(event.sender.id) === job) activeExports.delete(event.sender.id);
   return { canceled: true };
+});
+
+// All-intra proxies. "preview" proxies are cached on disk (small, whole file) so scrubbing and
+// reverse playback are instant; "export" proxies are full resolution, only the used range, and
+// are deleted afterwards.
+const proxyJobs = new Map();
+let previewProxyQueue = Promise.resolve();
+function proxyDir(kind) { return path.join(app.getPath('userData'), kind === 'export' ? 'export-proxies' : 'preview-proxies'); }
+ipcMain.handle('frame:ensure-proxy', async (event, payload) => {
+  assertTrustedSender(event);
+  const input = payload?.path;
+  if (typeof input !== 'string' || !path.isAbsolute(input)) throw new Error('Invalid media path.');
+  const stat = await fs.stat(input).catch(() => null);
+  if (!stat?.isFile()) throw new Error('Media file not found.');
+  const kind = payload.kind === 'export' ? 'export' : 'preview';
+  const start = kind === 'export' ? Math.max(0, Number(payload.start) || 0) : 0;
+  const length = kind === 'export' ? Math.max(0, Number(payload.duration) || 0) : 0;
+  const maxWidth = kind === 'preview' ? 960 : 0;
+  const key = createHash('sha1').update([input, stat.size, Math.round(stat.mtimeMs), kind, start.toFixed(3), length.toFixed(3), maxWidth, 'v2'].join('|')).digest('hex').slice(0, 24);
+  const outputPath = path.join(proxyDir(kind), `${key}.mp4`);
+  const cached = await fs.stat(outputPath).catch(() => null);
+  if (cached?.isFile() && cached.size > 1024) { const now = new Date(); fs.utimes(outputPath, now, now).catch(() => {}); return { path: outputPath, cached: true, start }; }
+  let job = proxyJobs.get(key);
+  if (!job) {
+    const run = () => makeIntraProxy({ input, outputPath, start, duration: length, maxWidth, crf: kind === 'preview' ? 26 : 14, threads: kind === 'preview' ? 2 : 0 })
+      .finally(() => proxyJobs.delete(key));
+    if (kind === 'preview') { job = previewProxyQueue.then(run, run); previewProxyQueue = job.catch(() => {}); }
+    else job = run();
+    proxyJobs.set(key, job);
+  }
+  await job;
+  trimProxyCache(proxyDir('preview'), 6 * 1024 ** 3).catch(() => {});
+  return { path: outputPath, cached: false, start };
+});
+ipcMain.handle('frame:release-export-proxies', async event => {
+  assertTrustedSender(event);
+  await fs.rm(proxyDir('export'), { recursive: true, force: true }).catch(() => {});
+  return { ok: true };
 });
 
 ipcMain.handle('frame:save-video', async (event, payload) => {
