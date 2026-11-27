@@ -1,38 +1,21 @@
-# 2.4.45 — Inspector Hotfix
+# 2.4.46 — Reliable & fast export, smooth preview
 
-### Fixed
-- Fixed Uncaught TypeError: $(...).forEach is not a function in updateContextTabs().
-- Use $$('.itab') and $$('.panel') to iterate all matching Inspector tabs and panels.
-- Added regression assertions for the collection-returning selector helper.
+**Export (the critical part)**
+- Frames are now streamed to FFmpeg as raw video through a pipe. No PNG encoding, no gigabytes of temporary frames on disk (a long project could fill the disk and fail), and FFmpeg encodes *while* the editor renders instead of after it.
+- Audio is validated before the first frame is rendered. A clip that FFmpeg cannot process (missing file, broken audio, bad path) now only produces a warning and is exported without sound, instead of failing the whole export at the end.
+- A finished MP4 is never deleted because of a metadata mismatch (fps/frame-count/duration checks are warnings now). Output is written as `name.mp4.part` and renamed only when complete.
+- A frame whose seek fails is retried and then repeated, instead of aborting the export at 90%. Two overlapping clips of the same media no longer abort the export.
+- The destination folder is tested for write access before rendering starts.
+- Colors are tagged BT.709, matching what the preview shows.
+- Audio clips are seeked in the input instead of decoding the whole file from the start.
+- Used video ranges are converted to a temporary all-intra copy so each frame seek is instant (also makes reversed clips and long-GOP sources fast). Deleted after export.
 
-### Compatibility
-- Retains the 2.4.44 realtime export pipeline, output containers, fullscreen viewer and playhead hit-area changes.
+**Preview**
+- Each video gets a cached low-resolution all-intra preview proxy (created in the background, 2 threads). Scrubbing and reverse playback no longer decode a whole GOP per frame. Exports never use the low-res proxy.
 
----
-
-# 2.4.44 — Realtime Export & Viewer
-
-### Added
-- Realtime canvas + project-audio capture using MediaRecorder, removing the per-frame PNG/IPC/temp-file path from the default export mode.
-- WebM native capture output and validated MP4, MOV and MKV H.264/AAC conversions.
-- Fullscreen preview viewer and a wider playhead drag target.
-
-### Improved
-- MP4 frame-accurate mode remains available and is selected automatically for projects with Time Remap.
-- Final containers are probed before being moved to the selected output path.
-- Export failures now include detailed DevTools console diagnostics.
-
-### Compatibility
-- Hotfix 3-derived timeline, groups, effects, opacity, video audio Inspector and updater behavior are retained.
-- Realtime mode follows playback and may drop frames under load; frame-accurate mode is for precision-sensitive MP4 output.
-
-# 2.4.43
-
-### Fixed
-- Timeline playhead remains draggable after timeline redraws; the pointer handler is attached whenever the playhead DOM node is recreated.
-- Video clips now expose and enable the Audio inspector panel for clip volume, fades and volume keyframes.
-- Application title, visible version badge and home footer now match the package version.
-- The release-version consistency test is now included in `npm test`.
+**Workspace**
+- "Restore layout" now restores panel order (a duplicate function overrode the fixed one).
+- Swapped panels keep the Viewer flexible, and the resize handles follow the panel order.
 
 # Changelog
 
