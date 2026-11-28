@@ -42,11 +42,14 @@ assert.doesNotMatch(movingPart, /\bupdateTimeline\(\)/, 'full timeline rebuild i
 assert.match(dragFn, /setPointerCapture/, 'resizing captures the pointer');
 assert.match(dragFn, /pointercancel/, 'cancel restores original clip values');
 
-const clipBuild = renderer.slice(renderer.indexOf('const timelineClips='), renderer.indexOf('const c=selected(),lanes=[]'));
-assert.match(clipBuild, /stillLike\?'duration-left':'left'/, 'still left handle adjusts duration; media left handle trims');
-assert.match(clipBuild, /stillLike\?'duration-right':'right'/, 'still right handle adjusts duration; media right handle trims');
-assert.match(clipBuild, /ev\.altKey&&!stillLike\?'stretch-right'/, 'Alt-right-handle explicitly stretches media time');
-assert.match(clipBuild, /c\.kind==='video'&&a\?\.hasAudio/, 'video waveform is shown only for audio-enabled sources');
+const timelineStart = renderer.indexOf('function updateTimeline(){');
+const timelineEnd = renderer.indexOf('\nfunction updateTimelineLiveDuringDrag', timelineStart);
+assert.ok(timelineStart >= 0 && timelineEnd > timelineStart, 'timeline renderer is present');
+const timelineBuild = renderer.slice(timelineStart, timelineEnd);
+assert.match(timelineBuild, /left\?\(e\.altKey&&!stillLike\?'stretch-left':stillLike\?'duration-left':'left'\)/, 'still left handle adjusts duration; media left handle trims');
+assert.match(timelineBuild, /right\?\(e\.altKey&&!stillLike\?'stretch-right':stillLike\?'duration-right':'right'\)/, 'still right handle adjusts duration; media right handle trims');
+assert.match(timelineBuild, /e\.altKey&&!stillLike\?'stretch-right'/, 'Alt-right-handle explicitly stretches media time');
+assert.match(timelineBuild, /c\.kind==='video'&&a\?\.hasAudio/, 'video waveform is shown only for audio-enabled sources');
 assert.match(renderer, /function drawWaveformCanvas\(/, 'waveforms are painted from generated peak arrays');
 assert.match(renderer, /frameAPI\.generateWaveform\(asset\.path,Number\(asset\.duration\)\|\|1\)/, 'real waveform samples are generated asynchronously through FFmpeg');
 assert.match(renderer, /info\.streams\?\.some\(stream=>stream\.codec_type==='audio'\)/, 'new video import detects real audio streams');
