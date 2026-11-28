@@ -254,7 +254,7 @@ async function makeIntraProxy(options = {}) {
   const tmp = `${outputPath}.tmp.mp4`;
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.rm(tmp, { force: true }).catch(() => {});
-  const vf = maxWidth > 0 ? `scale='min(${Math.round(maxWidth)},iw)':-2:flags=fast_bilinear,format=yuv420p` : 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p';
+  const vf = maxWidth > 0 ? `scale='min(${Math.round(maxWidth)},iw)':-2:flags=lanczos,format=yuv420p` : 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p';
   const args = ['-hide_banner', '-y', '-loglevel', 'error'];
   if (start > 0) args.push('-ss', Number(start).toFixed(3));
   args.push('-i', input);

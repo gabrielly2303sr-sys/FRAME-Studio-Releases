@@ -841,14 +841,14 @@ ipcMain.handle('frame:ensure-proxy', async (event, payload) => {
   const kind = payload.kind === 'export' ? 'export' : 'preview';
   const start = kind === 'export' ? Math.max(0, Number(payload.start) || 0) : 0;
   const length = kind === 'export' ? Math.max(0, Number(payload.duration) || 0) : 0;
-  const maxWidth = kind === 'preview' ? 960 : 0;
-  const key = createHash('sha1').update([input, stat.size, Math.round(stat.mtimeMs), kind, start.toFixed(3), length.toFixed(3), maxWidth, 'v2'].join('|')).digest('hex').slice(0, 24);
+  const maxWidth = kind === 'preview' ? 1920 : 0;
+  const key = createHash('sha1').update([input, stat.size, Math.round(stat.mtimeMs), kind, start.toFixed(3), length.toFixed(3), maxWidth, 'v3'].join('|')).digest('hex').slice(0, 24);
   const outputPath = path.join(proxyDir(kind), `${key}.mp4`);
   const cached = await fs.stat(outputPath).catch(() => null);
   if (cached?.isFile() && cached.size > 1024) { const now = new Date(); fs.utimes(outputPath, now, now).catch(() => {}); return { path: outputPath, cached: true, start }; }
   let job = proxyJobs.get(key);
   if (!job) {
-    const run = () => makeIntraProxy({ input, outputPath, start, duration: length, maxWidth, crf: kind === 'preview' ? 26 : 14, threads: kind === 'preview' ? 2 : 0 })
+    const run = () => makeIntraProxy({ input, outputPath, start, duration: length, maxWidth, crf: kind === 'preview' ? 20 : 14, threads: kind === 'preview' ? 2 : 0 })
       .finally(() => proxyJobs.delete(key));
     if (kind === 'preview') { job = previewProxyQueue.then(run, run); previewProxyQueue = job.catch(() => {}); }
     else job = run();

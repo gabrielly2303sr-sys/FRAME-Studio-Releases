@@ -1,3 +1,14 @@
+# 2.4.48 — Keyboard & video preview quality
+
+**Keyboard**
+- Focused buttons, switches and other button-like controls no longer consume the Space key as an editor shortcut or activate through Space. Use Enter to activate the focused control; Space remains available for editor playback when focus is outside interactive controls.
+
+**Video preview**
+- Normal video previews without expensive effects stay at the full texture resolution instead of being reduced by the general playback texture budget.
+- Preview proxies preserve up to 1920 px, use CRF 20 and Lanczos downscaling rather than a 960 px / CRF 26 / fast-bilinear proxy.
+- Temporary decoded-frame snapshots support up to 1920 px.
+- Proxy cache key advanced to v3 so old 960 px low-quality proxy files are not reused.
+
 # 2.4.47 — Editor workflow & preview
 
 **Editing**

@@ -1,8 +1,8 @@
-# FRAME Studio 2.4.47 — Release overlay
+# FRAME Studio 2.4.48 — Keyboard & video preview fix
 
-This ZIP is an **overlay for the exact `main` branch at 2.4.46**, not a complete source archive and not a Rust migration build. Apply it only to a clean clone of `gabrielly2303sr-sys/FRAME-Studio-Releases` whose `frame-studio-linux/package.json` is 2.4.46 and whose `frame-studio-linux/index.html` matches the SHA checked by `apply-release-2.4.47.sh`.
+This is an incremental fix on top of the merged FRAME Studio 2.4.47 source. It is not a complete source archive or a Rust migration build.
 
-The overlay updates the renderer, package version/lockfile, release documentation and regression tests. It deliberately does **not** replace the Electron main process, preload, streaming exporter, media protocol/range handler, media tools, bundled-tool scripts, updater workflow, or platform build configuration. Those remain from the validated 2.4.46 repository base.
+This update changes keyboard activation, video-preview resolution, preview-proxy encoding and regression tests. It deliberately does **not** replace the Electron main process, preload, streaming exporter, media protocol/range handler, media tools, bundled-tool scripts, updater workflow, or platform build configuration. Those remain from the validated 2.4.46 repository base.
 
 ## Included editor features
 
