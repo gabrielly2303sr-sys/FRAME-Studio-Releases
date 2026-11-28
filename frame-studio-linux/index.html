@@ -1495,7 +1495,7 @@ $('#viewer').addEventListener('dragover',e=>{e.preventDefault();$('#importbtn').
 $('#newproject').addEventListener('click',()=>{if(!$('#app').classList.contains('home-open')&&!confirm('Create an empty project? Timeline clips will be removed; imported files will remain in the library.'))return;flushAutosaveNow();pushUndo('new-project');clips=[];markers=[];selectedId=null;selectedIds.clear();selectedGroupId=null;activeGroupViewId=null;timelineTargetTrack=null;playhead=0;camera3d=defaultCamera3d();videoTrackCount=6;audioTrackCount=3;updateCameraUI();playing=false;playStarting=false;playbackEpoch++;sourcePlaying=false;sourcePlaybackEpoch++;syncMedia(true);$('#play').textContent='▶';updateTimeline();updateInspector();drawPreview();leaveHome();setStatus('New project created')});$('#projectname').addEventListener('change',()=>{setStatus(`Project: ${$('#projectname').value}`);queueAutosave()});
 let spaceShortcutKeyHandled=false;
 function isTypingTarget(target){if(!target)return false;if(['INPUT','TEXTAREA','SELECT'].includes(target.tagName)||target.isContentEditable)return true;if(target.closest?.('[contenteditable="true"],[contenteditable=""],.shortcut-button.listening'))return true;return false}
-function isButtonActivationTarget(target){return !!target?.closest?.('button,[role=button],[role=switch],input,summary)}
+function isButtonActivationTarget(target){return !!target?.closest?.("button,[role='button'],[role='switch'],input,summary")}
 function isSpaceEvent(e){return e.code==='Space'||e.key===' '}
 function hasOpenDialog(){return !!document.querySelector('dialog[open]')}
 function stopKeyboardEvent(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.()}
