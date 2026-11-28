@@ -20,6 +20,8 @@ const buttonTargetSource = functionSource(html, 'isButtonActivationTarget', 'isS
 const isButtonActivationTarget = vm.runInNewContext(`${buttonTargetSource};isButtonActivationTarget`);
 assert.equal(isButtonActivationTarget({ closest: selector => selector.includes('button') ? {} : null }), true);
 assert.equal(isButtonActivationTarget({ closest: () => null }), false);
+assert.ok(buttonTargetSource.includes("input[type='button']"), 'button inputs are guarded');
+assert.ok(!buttonTargetSource.includes(',input,'), 'plain text inputs remain editable with Space');
 
 const dispatchSource = functionSource(html, 'dispatchShortcutKeyDown', 'suppressNativeSpaceActivation');
 const dispatchContext = {
@@ -70,6 +72,8 @@ const timelineRenderer = functionSource(html, 'updateTimeline', 'updateTimelineL
 assert.match(timelineRenderer, /zone\.addEventListener\('click'/, 'clip click handling is delegated to the timeline zone');
 assert.match(timelineRenderer, /zone\.addEventListener\('pointerdown'/, 'clip drag handling is delegated to the timeline zone');
 assert.match(timelineRenderer, /document\.createDocumentFragment\(\)/, 'clip elements are inserted as a batch');
+assert.match(html, /\.clip:not\(\.group-summary\)::before/, 'clip trim grips use CSS instead of extra DOM nodes');
+assert.match(timelineRenderer, /const rect=el\.getBoundingClientRect\(\),edge=/, 'trim hit testing uses clip edges');
 assert.match(timelineRenderer, /groupDisclosuresByClip\.get\(c\.id\)/, 'group disclosure controls are precomputed once per timeline refresh');
 assert.doesNotMatch(timelineRenderer, /el\.addEventListener\('click',ev=>\{ev\.stopPropagation\(\);if\(suppressClipClickId/, 'clip nodes do not own individual click handlers');
 assert.doesNotMatch(timelineRenderer, /el\.addEventListener\('pointerdown',ev=>beginClipDrag/, 'clip nodes do not own individual drag handlers');
