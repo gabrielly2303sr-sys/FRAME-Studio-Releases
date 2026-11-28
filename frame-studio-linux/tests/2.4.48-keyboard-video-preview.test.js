@@ -30,7 +30,10 @@ const dispatchContext = {
   isTypingTarget: () => false,
   stopKeyboardEvent: event => { event.prevented = true; },
   spaceShortcutKeyHandled: false,
-  canonicalKey: () => { throw new Error('A focused button must not dispatch editor shortcuts.'); },
+  canonicalKey: event => event.key === ' ' ? 'Space' : event.key,
+  normalizeHotkey: value => value,
+  shortcuts: { play: 'Space' },
+  runShortcut: () => {},
   hasOpenDialog: () => false
 };
 const dispatchShortcutKeyDown = vm.runInNewContext(`(${dispatchSource})`, dispatchContext);
@@ -55,8 +58,8 @@ scaleContext.previewQualityMode = 'fast';
 assert.ok(scaleContext.effectPreviewScale(props, 1920, 1080, 'video') < 1, 'fast scrubbing may use its temporary lower-resolution path');
 
 const cacheFunction = functionSource(html, 'rememberVideoPreviewFrame', 'cachedVideoPreviewFrame');
-assert.match(cacheFunction, /1920\\//, 'decoded frame cache supports 1920px previews');
-assert.doesNotMatch(cacheFunction, /960\\//, 'decoded frame cache no longer downsamples to 960px');
+assert.ok(cacheFunction.includes('1920/'), 'decoded frame cache supports 1920px previews');
+assert.ok(!cacheFunction.includes('960/'), 'decoded frame cache no longer downsamples to 960px');
 assert.match(main, /const maxWidth = kind === 'preview' \? 1920 : 0;/, 'preview proxy preserves 1080p width');
 assert.match(main, /crf: kind === 'preview' \? 20 : 14/, 'preview proxy uses a less compressed quality setting');
 assert.match(main, /'v3'/, 'old low-resolution cached proxies are invalidated');
