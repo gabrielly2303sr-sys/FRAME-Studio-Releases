@@ -967,26 +967,41 @@ function updateTimeline(){
  zone.querySelectorAll('.clip,.keylane,.trackrow,.playhead,.timeline-snap-indicator').forEach(e=>e.remove());
  zone.style.height=`${baseHeight}px`;
  for(let track=maxTrack;track>=minTrack;track--){const row=document.createElement('div');row.className='trackrow'+(track<=0?' trackrow-audio':(track%2===0?' trackrow-video-even':' trackrow-video-odd'));row.dataset.track=String(track);row.setAttribute('aria-label',track<=0?'Audio Track A'+(Math.abs(track)+1):'Video Track '+track);row.style.top=`${trackGeo.tops[track]}px`;row.style.height=`${trackGeo.heights[track]}px`;row.dataset.trackHeight=String(trackGeo.heights[track]);row.style.zIndex='0';zone.appendChild(row)}const ph=document.createElement('div');ph.className='playhead';ph.id='playhead';zone.appendChild(ph);
- const focusedClipIds=activeGroupViewId?new Set(groupDescendantClipIds(activeGroupViewId)):null;
  const timelineClipById=new Map(clips.map(item=>[item.id,item]));
  const timelineAssetById=new Map(assets.map(item=>[item.id,item]));
- const timelineGroupNameById=new Map(layerGroups.map(group=>[group.id,group.name||clips.find(item=>item.groupId===group.id)?.groupName||'Grupo']));
- const timelineGroupDepthById=new Map();
- const groupDisclosuresByClip=new Map();
+ const timelineGroupsById=new Map(layerGroups.map(group=>[group.id,group]));
+ const timelineGroupMembersById=new Map(layerGroups.map(group=>[group.id,[]]));
+ const timelineGroupAncestorsById=new Map(),timelineGroupDepthById=new Map(),timelineGroupNameById=new Map(),groupDisclosuresByClip=new Map();
+ const hiddenTimelineClipIds=new Set(),focusedClipIds=activeGroupViewId?new Set():null;
  for(const group of layerGroups){
-  const ancestors=groupAncestorIds(group.id,false);
-  timelineGroupDepthById.set(group.id,ancestors.length+1);
+  const ancestors=[],seen=new Set();let parent=group.parentId;
+  while(parent&&timelineGroupsById.has(parent)&&!seen.has(parent)){seen.add(parent);ancestors.push(parent);parent=timelineGroupsById.get(parent).parentId||null}
+  timelineGroupAncestorsById.set(group.id,ancestors);timelineGroupDepthById.set(group.id,ancestors.length+1);
+  timelineGroupNameById.set(group.id,group.name||'Grupo');
+ }
+ for(const clip of clips){
+  let groupId=clip.groupId,guard=0;
+  while(groupId&&timelineGroupsById.has(groupId)&&guard++<layerGroups.length+1){
+   const group=timelineGroupsById.get(groupId);timelineGroupMembersById.get(groupId).push(clip);
+   if(collapsedGroups.has(groupId))hiddenTimelineClipIds.add(clip.id);
+   if(focusedClipIds&&groupId===activeGroupViewId)focusedClipIds.add(clip.id);
+   groupId=group.parentId||null;
+  }
+  if(clip.groupId&&clip.groupName&&!timelineGroupNameById.has(clip.groupId))timelineGroupNameById.set(clip.groupId,clip.groupName);
+ }
+ for(const group of layerGroups){
+  const ancestors=timelineGroupAncestorsById.get(group.id)||[];
   if(collapsedGroups.has(group.id)||ancestors.some(id=>collapsedGroups.has(id)))continue;
   if(activeGroupViewId&&(group.id===activeGroupViewId||!ancestors.includes(activeGroupViewId)))continue;
   const mask=group.maskMode==='alpha'?timelineClipById.get(group.maskClipId):null;
-  const members=mask&&mask.kind!=='audio'&&mask.track!==0?[]:groupDescendantClips(group.id);
+  const members=timelineGroupMembersById.get(group.id)||[];
   const representative=mask&&mask.kind!=='audio'&&mask.track!==0?mask:(members.find(item=>item.kind!=='audio')||members[0]);
   if(!representative)continue;
   const list=groupDisclosuresByClip.get(representative.id)||[];
   list.push({group,depth:ancestors.length+1});groupDisclosuresByClip.set(representative.id,list);
  }
  for(const list of groupDisclosuresByClip.values())list.sort((a,b)=>a.depth-b.depth);
- const timelineClips=clips.filter(c=>!isClipHiddenByCollapsedGroup(c)&&(!focusedClipIds||focusedClipIds.has(c.id)));
+ const timelineClips=clips.filter(c=>!hiddenTimelineClipIds.has(c.id)&&(!focusedClipIds||focusedClipIds.has(c.id)));
  const clipFragment=document.createDocumentFragment();
  timelineClips.forEach(c=>{const el=document.createElement('div');el.className=`clip ${c.kind}${c.id===selectedId?' selected':''}${selectedIds.has(c.id)&&c.id!==selectedId?' multi-selected':''}${c.groupId?' grouped':''}${trackSettings[c.track]?.hidden?' track-hidden':''}${trackSettings[c.track]?.locked?' track-locked':''}`;el.id=`timeline-clip-${c.id}`;el.dataset.id=c.id;el.dataset.track=String(c.track);const rowTop=trackGeo.tops[Number(c.track)||0]||0;el.style.left=`${c.start*px}px`;el.style.top=`${rowTop+4}px`;el.style.width=`${Math.max(20,duration(c)*px)}px`;el.style.height=`${Math.max(20,(trackGeo.heights[Number(c.track)||0]||TRACK_ROW_HEIGHT)-8)}px`;{
   const a=timelineAssetById.get(c.assetId),hasWaveform=c.kind==='audio'||(c.kind==='video'&&a?.hasAudio),peaks=hasWaveform&&a&&waveformCache.get(a.id);if(hasWaveform){
