@@ -1,24 +1,38 @@
-# FRAME Studio 2.4.46 — Appearance, Camera Pivot & Timeline Workflow
+# FRAME Studio 2.4.47 — Release overlay
 
-This is an incremental update to the existing FRAME Studio editor, not a rewrite. It retains the existing project format and code architecture. The source archive available for this update was based on the 2.4.25 source kit; changes that may exist only in remote releases 2.4.26–2.4.30 were not available in this workspace and should be merged from the actual 2.4.30 source before replacing the latest release.
+This ZIP is an **overlay for the exact `main` branch at 2.4.46**, not a complete source archive and not a Rust migration build. Apply it only to a clean clone of `gabrielly2303sr-sys/FRAME-Studio-Releases` whose `frame-studio-linux/package.json` is 2.4.46 and whose `frame-studio-linux/index.html` matches the SHA checked by `apply-release-2.4.47.sh`.
 
-## Added
-- Appearance accent modes: solid color, animated RGB gradient, and background-adaptive RGB gradient, with saturation, lightness, and speed controls. Background palette sampling falls back safely when an image/video cannot be sampled by the browser.
-- Optional 3D camera look-at pivot, numeric XYZ controls, pivot-at-selected-layer, and orbit navigation around the pivot.
-- Group/ungroup and enter/exit group controls; effect-library selections apply to selected layers, and transform-handle resizing scales multiple selected layers together.
-- Time Remap Freeze Frame · Split: creates before, one-second frozen-frame, and after segments on the same track.
-- End + join: trims a clip at the playhead and closes the following gap on that track.
+The overlay updates the renderer, package version/lockfile, release documentation and regression tests. It deliberately does **not** replace the Electron main process, preload, streaming exporter, media protocol/range handler, media tools, bundled-tool scripts, updater workflow, or platform build configuration. Those remain from the validated 2.4.46 repository base.
 
-## Compatibility and tests
-Older project files remain readable. The added camera pivot fields default when absent. Background-adaptive accent color depends on whether the Electron/Chromium canvas can sample the selected background media.
+## Included editor features
 
-Run from this directory:
+- Direct playhead dragging, optional nearest-clip-edge cursor behavior, 12 available audio lanes, and extracted-audio mute state.
+- Hue adjustment for images, videos and animated GIFs; keyframe copy/paste; keyframable Chroma Key/Colorize/text values; Chroma Key eyedropper.
+- Text entrance presets, fullscreen preview, faster color-correction LUT path, improved video preload/seek presentation, recovery snapshots, and expanded Turbulent Displace bounds.
+- Existing editor workflow features are retained in the renderer: RGB/background-adaptive/custom-gradient accent modes, numeric 3D camera orbit pivot, layer groups, Time Remap Freeze Frame split, and End + join.
+- The 2.4.46 streaming-export implementation and 2.4.30 media byte-range backend remain supplied by the target repository base, because this overlay does not overwrite those files.
+
+The regression audit compared renderer element IDs and named JavaScript functions against the available 2.4.27 preview and 2.4.30 source kits: none of those IDs or named functions are missing from this renderer. The new feature test and the 2.4.46 workspace UI regression test also pass in this audit environment.
+
+## Apply and test
+
+Extract this ZIP, then run the included script against a clean 2.4.46 clone:
+
 ```sh
-npm install --no-audit --no-fund
+bash /path/to/FRAME-Studio-2.4.47-release/apply-release-2.4.47.sh /path/to/FRAME-Studio-Releases
+cd /path/to/FRAME-Studio-Releases/frame-studio-linux
+npm ci
 npm test
 ```
 
-Automated regression tests pass in this source workspace. A packaged Electron GUI was not launched here, so verify the appearance controls, camera pivot/orbit, multi-layer effects/resizing, freeze split, and end-and-join operation in the actual app before treating the update as fully validated.
+This ZIP is a **source patch**, not an AppImage or installer. Do not upload this ZIP as the auto-update asset. The GitHub Release workflow must build the Windows NSIS and Linux AppImage/DEB/RPM packages from the merged `v2.4.47` tag and attach the updater metadata.
 
-## Release
-The package version is `2.4.46` and should be published with tag `v2.4.46`. The GitHub Releases provider and updater metadata assets (`latest.yml` and `latest-linux.yml`) remain configured; they must be rebuilt through the real release workflow. Windows NSIS and Linux AppImage are the supported auto-update channels. The source archive available for this local preview was based on the 2.4.25 source kit; confirm/merge any additional changes from intermediate source versions before an official release.
+## Validation limits
+
+Automated source tests do not replace launching the packaged Electron app. Verify drag feel, audio playback/routing, eyedropper sampling, fullscreen, text animation, GIF/video scrubbing, and final MP4 output on real projects. Motion Blur remains a transform trail rather than true temporal frame blending. The reported inverted-shadow/missing-layer issue is not claimed fixed without the affected project and source media.
+
+## Update metadata
+
+Windows releases use the `latest.yml` metadata file generated alongside the release artifacts to support the updater. This metadata is produced by the release packaging workflow.
+
+Linux releases use `latest-linux.yml` as updater metadata generated alongside the release artifacts.
