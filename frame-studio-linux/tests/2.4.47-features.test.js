@@ -100,7 +100,7 @@ console.log('FRAME Studio 2.4.48 preview feature/regression tests: OK');
   const page = fs2.readFileSync(path2.join(__dirname, '..', 'index.html'), 'utf8');
   const pkg2 = require('../package.json');
   assert2.equal(pkg2.version, '2.4.48');
-  assert2.match(page, /<title>FRAME Studio 2\.4\.47<\/title>/);
+  assert2.match(page, /<title>FRAME Studio 2\.4\.48<\/title>/);
   assert2.doesNotMatch(page, /2\.4\.47 Preview/);
   assert2.match(page, /const lut1=new Uint8ClampedArray\(256\),STEPS=64/, 'color pass builds lookup tables');
   const start = page.indexOf('const lut1=new Uint8ClampedArray(256)');
