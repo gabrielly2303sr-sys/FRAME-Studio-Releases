@@ -65,4 +65,27 @@ assert.match(main, /crf: kind === 'preview' \? 20 : 14/, 'preview proxy uses a l
 assert.match(main, /'v3'/, 'old low-resolution cached proxies are invalidated');
 assert.match(proxyBuilder, /flags=lanczos/, 'proxy downscaling uses a higher-quality resampler');
 
-console.log('FRAME Studio 2.4.48 keyboard and video-preview regressions: OK');
+
+const timelineRenderer = functionSource(html, 'updateTimeline', 'updateTimelineLiveDuringDrag');
+assert.match(timelineRenderer, /zone\.addEventListener\('click'/, 'clip click handling is delegated to the timeline zone');
+assert.match(timelineRenderer, /zone\.addEventListener\('pointerdown'/, 'clip drag handling is delegated to the timeline zone');
+assert.match(timelineRenderer, /document\.createDocumentFragment\(\)/, 'clip elements are inserted as a batch');
+assert.match(timelineRenderer, /groupDisclosuresByClip\.get\(c\.id\)/, 'group disclosure controls are precomputed once per timeline refresh');
+assert.doesNotMatch(timelineRenderer, /el\.addEventListener\('click',ev=>\{ev\.stopPropagation\(\);if\(suppressClipClickId/, 'clip nodes do not own individual click handlers');
+assert.doesNotMatch(timelineRenderer, /el\.addEventListener\('pointerdown',ev=>beginClipDrag/, 'clip nodes do not own individual drag handlers');
+
+const liveTimeline = functionSource(html, 'updateTimelineLiveDuringDrag', 'beginPlayheadDrag');
+assert.match(liveTimeline, /drag\?\.ids/, 'live drag updates only the moved clip ids');
+assert.match(liveTimeline, /getElementById\(\`timeline-clip-/, 'moved clip elements are fetched directly');
+assert.doesNotMatch(liveTimeline, /querySelectorAll\('\.clip:not\(\.group-summary\)'\)/, 'live drag does not walk every clip in the timeline');
+
+const clipDrag = functionSource(html, 'beginClipDrag', 'updateTimelineLiveDuringDrag');
+assert.match(clipDrag, /snapCandidates:/, 'snap candidates are cached at drag start');
+assert.match(clipDrag, /candidates=drag\.snapCandidates/, 'pointer moves do not rebuild the snap list');
+
+assert.match(html, /if\(camera3d\.enabled&&camera3d\.viewMode==='scene'\)\{const p=currentLayerProps\(c,playhead\),d=transformDimensions\(c,p\);/, '3D handles are limited to Scene Editor');
+assert.match(html, /if\(camera3d\.enabled&&camera3d\.viewMode==='scene'\)\{const center=cameraProject/, '3D transform interaction is limited to Scene Editor');
+assert.match(html, /camera3d\.viewMode!=='scene'\|\|!camera3d\.orbitPivotEnabled/, 'Camera View does not show the Scene Editor pivot marker');
+assert.match(html, /function drawSceneEditorViewport\(\)[\s\S]*?renderSceneCameraGizmo\(svg,camCenter/, 'Scene Editor keeps its 3D camera gizmo');
+
+console.log('Ua holo pono nā hoʻāʻo keyboard, video preview, timeline, a me nā mana kamera.');
