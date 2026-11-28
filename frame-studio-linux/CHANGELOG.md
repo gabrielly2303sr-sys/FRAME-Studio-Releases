@@ -1,3 +1,30 @@
+# 2.4.47 — Editor workflow & preview
+
+**Editing**
+- The playhead can be dragged directly with the left mouse button (pointer events are delegated to the persistent timeline zone, so redraws no longer break the drag).
+- New setting **Cursor na borda**: selecting a clip moves the playhead to the nearest left/right clip edge.
+- Independent audio lanes (A1–A12) with drag/drop between lanes.
+- Video clips with an audio stream expose the Audio inspector tab. Extracting audio creates a separate audio clip and mutes the original video clip's audio (also during export).
+- Keyframe copy/paste for the selected channel or all channels, preserving timing offsets.
+- Keyframes for Chroma Key color/tolerance, Colorize color/intensity and text color/size; Chroma Key eyedropper.
+- Text entrance presets: Fade, Rise, Pop, Slide Left, Slide Right, Typewriter.
+- Fullscreen preview (toolbar button and double-click).
+- Refined Scene Editor tool styling.
+
+**Color & effects**
+- Hue rotation for images, video and animated GIFs, with keyframes.
+- Color correction (brightness, contrast, saturation, exposure, gamma, hue) now uses lookup tables instead of three `Math.pow` calls per pixel: about 7x faster on a 2-megapixel frame in our benchmark, same output within 2/255 levels (mean difference 0.004).
+- Turbulent Displace expands the effect surface before displacing, so pixels can move beyond the original media bounds (512 px cap per side).
+
+**Preview & safety**
+- Preview decoding prioritizes the active and nearest upcoming video assets; a decoded frame is kept while a seek is in progress.
+- Recovery snapshots are written immediately before New Project, Home, Open/Replace Project and window close (including Alt+F4). The snapshot is recoverable on next start; it is not a named .frameproj, keep using Save Project.
+
+**Known limitations**
+- "Motion Blur / eco" is still a transform trail, not temporal frame blending.
+- The reported inverted-shadow / missing-layer render issue could not be reproduced without the affected project and media; it is not claimed fixed.
+- GUI validation (drag feel, audio routing, eyedropper, fullscreen, text animation, scrubbing performance, final render) must be done on the installed app.
+
 # 2.4.46 — Reliable & fast export, smooth preview
 
 **Export (the critical part)**

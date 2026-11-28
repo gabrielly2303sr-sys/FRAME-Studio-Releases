@@ -71,5 +71,5 @@ const { probeMedia, resolveToolPath } = require('../media-export.cjs');
   assert.ok(keys.length > 30 && keys.every(k => k.startsWith('K')), 'every proxy frame must be a keyframe');
 
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log('2.4.46 streaming export tests passed');
+  console.log('2.4.47 streaming export tests passed');
 })().catch(error => { console.error(error); process.exit(1); });

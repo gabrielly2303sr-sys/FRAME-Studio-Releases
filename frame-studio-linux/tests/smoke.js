@@ -15,7 +15,7 @@ const renderer = scripts[0][1];
 new vm.Script(renderer, { filename: 'renderer-inline.js' });
 new vm.Script(main, { filename: 'main.cjs' });
 new vm.Script(preload, { filename: 'preload.cjs' });
-assert.equal(pkg.version, '2.4.46', 'package version');
+assert.equal(pkg.version, '2.4.47', 'package version');
 
 for (const required of [
   'id="previewmode"', 'id="addselected"', 'id="trackzone"', 'function makeFallbackImageTexture(c,a)',
@@ -390,7 +390,7 @@ const triangleContext=vm.createContext({ctx:{save(){},restore(){},setTransform()
 vm.runInContext(triangleSource,triangleContext);
 vm.runInContext('drawTexturedTriangle(texture,{x:0,y:0},{x:1,y:0},{x:0,y:1},{x:0,y:0},{x:1,y:0},{x:0,y:1})',Object.assign(triangleContext,{texture:wrapper}));
 assert.equal(triangleDrawCalls[0][0],drawable,'a câmera 3D também deve desenhar o canvas da textura');
-assert.match(renderer, /c\.kind==='text'\?c\.text:null/, 'texto não pode acessar a.kind quando a camada não tem asset');
+assert.match(renderer, /c\.kind==='text'\?p\.text:null/, 'texto animado deve usar props avaliadas sem acessar o asset');
 
 
 // Regression: the still-image fallback must produce a valid CanvasImageSource wrapper.
