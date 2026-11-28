@@ -92,14 +92,14 @@ for (const mode of ['solid', 'rgb', 'background-rgb', 'custom-gradient']) {
 assert.match(html, /audioEl/, 'separate video audio element retained');
 assert.match(html, /createMediaElementSource/, 'audio graph routing retained');
 
-console.log('FRAME Studio 2.4.47 preview feature/regression tests: OK');
+console.log('FRAME Studio 2.4.48 preview feature/regression tests: OK');
 
-// 2.4.47 release gate: color correction must use lookup tables (no per-pixel Math.pow) and the window must not be a "Preview".
+// 2.4.48 release gate: color correction must use lookup tables (no per-pixel Math.pow) and the window must not be a "Preview".
 {
   const fs2 = require('node:fs'), path2 = require('node:path'), assert2 = require('node:assert/strict');
   const page = fs2.readFileSync(path2.join(__dirname, '..', 'index.html'), 'utf8');
   const pkg2 = require('../package.json');
-  assert2.equal(pkg2.version, '2.4.47');
+  assert2.equal(pkg2.version, '2.4.48');
   assert2.match(page, /<title>FRAME Studio 2\.4\.47<\/title>/);
   assert2.doesNotMatch(page, /2\.4\.47 Preview/);
   assert2.match(page, /const lut1=new Uint8ClampedArray\(256\),STEPS=64/, 'color pass builds lookup tables');
@@ -107,5 +107,5 @@ console.log('FRAME Studio 2.4.47 preview feature/regression tests: OK');
   const loop = page.slice(page.indexOf('for(let i=0;i<d.length;i+=4){const r0=lut1', start), page.indexOf('if(keyStrength>0){const hex=', start));
   assert2.ok(loop.length > 100, 'LUT pixel loop found');
   assert2.doesNotMatch(loop, /Math\.pow/, 'no Math.pow inside the per-pixel loop');
-  console.log('2.4.47 release gate: OK');
+  console.log('2.4.48 release gate: OK');
 }
